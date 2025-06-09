@@ -1,0 +1,125 @@
+@keyframes shaking {
+    0% {
+        transform: translateX(0);
+    }
+    5% {
+        transform: translateX(-3%);
+    }
+    10% {
+        transform: translateX(0);
+    }
+    15% {
+        transform: translateX(3%);
+    }
+    20% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-3%);
+    }
+    30% {
+        transform: translateX(0);
+    }
+    35% {
+        transform: translateX(3%);
+    }
+    40% {
+        transform: translateX(0);
+    }
+    45% {
+        transform: translateX(-3%);
+    }
+    50% {
+        transform: translateX(0);
+    }
+    55% {
+        transform: translateX(3%);
+    }
+    60% {
+        transform: translateX(0);
+    }
+    65% {
+        transform: translateX(-3%);
+    }
+    70% {
+        transform: translateX(0);
+    }
+    75% {
+        transform: translateX(3%);
+    }
+    80% {
+        transform: translateX(0);
+    }
+    85% {
+        transform: translateX(-3%);
+    }
+    90% {
+        transform: translateX(0);
+    }
+    95% {
+        transform: translateX(3%);
+    }
+    100% {
+        transform: translateX(0%);
+    }
+}
+
+@keyframes gradient {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@font-face {
+    font-family: 'AaGothic (Non-Commercial Use)';
+    src: url('../assets/fonts/AaGothicNon-CommercialUse.eot');
+    src: url('../assets/fonts/AaGothicNon-CommercialUse.eot?#iefix') format('embedded-opentype'),
+    url('../assets/fonts/AaGothicNon-CommercialUse.woff2') format('woff2'),
+    url('../assets/fonts/AaGothicNon-CommercialUse.woff') format('woff'),
+    url('../assets/fonts/AaGothicNon-CommercialUse.ttf') format('truetype'),
+    url('../assets/fonts/AaGothicNon-CommercialUse.svg#AaGothicNon-CommercialUse') format('svg');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+@keyframes glowRotate {
+    0% {
+        filter: drop-shadow(0px -10px 10px #f0f) drop-shadow(0px -10px 10px #324949);
+    }
+    25% {
+        filter: drop-shadow(0px -10px 20px #f0f) drop-shadow(0px -10px 20px #324949);
+    }
+    50% {
+        filter: drop-shadow(0px -10px 10px #0080ff) drop-shadow(0px -10px 10px #324949);
+    }
+    75% {
+        filter: drop-shadow(0px -10px 20px #0080ff) drop-shadow(0px -10px 20px #324949);
+    }
+    100% {
+        filter: drop-shadow(0px -10px 10px #f0f) drop-shadow(0px -10px 10px #324949);
+    }
+}
+
+@keyframes glowRotateMobile {
+    0% {
+        filter: drop-shadow(0px -5px 5px #f0f) drop-shadow(0px -5px 5px #324949);
+    }
+    25% {
+        filter: drop-shadow(0px -5px 7px #f0f) drop-shadow(0px -5px 7px #324949);
+    }
+    50% {
+        filter: drop-shadow(0px -5px 5px #0080ff) drop-shadow(0px -5px 5px #324949);
+    }
+    75% {
+        filter: drop-shadow(0px -5px 7px #0080ff) drop-shadow(0px -5px 7px #324949);
+    }
+    100% {
+        filter: drop-shadow(0px -5px 5px #f0f) drop-shadow(0px -5px 5px #324949);
+    }
+}
