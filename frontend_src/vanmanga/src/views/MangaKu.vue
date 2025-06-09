@@ -46,7 +46,7 @@
           prop="serialization"
           width="85">
         <template slot-scope="scope">
-          <el-tag v-if="scope.row.serialization === 0" effect="dark" type="success"><strong>未完结</strong></el-tag>
+          <el-tag v-if="scope.row.serialization === 0" effect="dark" type="primary"><strong>未完结</strong></el-tag>
           <el-tag v-else effect="dark" type="info"><strong>已完结</strong></el-tag>
         </template>
       </el-table-column>
