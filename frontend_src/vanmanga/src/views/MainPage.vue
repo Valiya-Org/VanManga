@@ -3,7 +3,7 @@
     <!-- 电脑版本页面 -->
     <el-container v-if="!this.$store.state.isPhone" id = "main">
       <el-header class="frame header">
-        <img alt="Vue logo" src="../assets/naiveLogo.png" id="logo">
+        <img alt="Vue logo" src="../assets/nativeLogo.png" id="logo">
         <div class="statusBlock">
           <el-tag
               v-if="this.$store.state.isLoginAlready"
@@ -58,7 +58,7 @@
       <van-nav-bar>
         <template #title>
           <div class="mobileLogoStage">
-            <img alt="Vue logo" src="../assets/naiveLogo.png" id="mobileLogo">
+            <img alt="Vue logo" src="../assets/nativeLogo.png" id="mobileLogo">
           </div>
         </template>
       </van-nav-bar>
