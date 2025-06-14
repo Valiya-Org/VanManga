@@ -4,6 +4,7 @@ from utils.flaresolverr_bypasser import flaresolverr_bypasser
 from utils.kavita_lib_pull import kavita_lib_pull
 from utils.kavita_scan_folder import kavita_scan_folder
 from utils.lib_pagination import libPagination
+from utils.security_code_verification import security_code_verification
 from utils.thumbnails_creator import thumbnails_creator
 
 gevent.monkey.patch_all()
@@ -37,8 +38,8 @@ from modules.DGmanga import DGmanga
 
 app = Flask(
     __name__,
-    static_folder="frontend/static",
-    template_folder="frontend/static/templates",
+    static_folder="frontend_static/static",
+    template_folder="frontend_static/static/templates",
 )
 CORS(app, expose_headers=["Content-Disposition"])
 api = Api(app)
@@ -105,12 +106,15 @@ delete_manga_args = reqparse.RequestParser()
 delete_manga_args.add_argument(
     "manga_id", type=str, help="manga_id is required", required=True
 )
+delete_manga_args.add_argument("code", type=str, required=True)
 kavita_login_args = reqparse.RequestParser()
 kavita_login_args.add_argument("username", type=str)
 kavita_login_args.add_argument("password", type=str)
 token_refresh_args = reqparse.RequestParser()
 token_refresh_args.add_argument("jwt", type=str)
 token_refresh_args.add_argument("refreshToken", type=str)
+security_code_args = reqparse.RequestParser()
+security_code_args.add_argument("code", type=str)
 
 Current_download = ""
 Q = None
@@ -620,12 +624,18 @@ class DogeCurDownloading(Resource):
 
 
 class DogeReZip(Resource):
-    def get(self):
-        gevent.threading.Thread(target=re_zip_task).start()
+    def post(self):
+        args = security_code_args.parse_args()
+        code = args["code"]
+        if security_code_verification(code):
+            gevent.threading.Thread(target=re_zip_task).start()
 
-        gevent.sleep(0)
+            gevent.sleep(0)
 
-        return {"data": "Re zip downloaded document begin", "code": 200}
+            return {"data": "Re zip downloaded document begin", "code": 200}
+        else:
+            return {"data": "Re zip downloaded document failed, security code is wrong", "code": 401}, 401
+
 
 
 class DogeShortLib(Resource):
@@ -713,32 +723,36 @@ class DogeDeleteManga(Resource):
 
     def delete(self):
         args = delete_manga_args.parse_args()
-        manga_id = args["manga_id"]
-        print(f"\nDelete API is working, manga_id:{manga_id}")
+        manga_id, code = args["manga_id"], args["code"]
 
-        queue_ids = [task["manga_id"] for task in Q.get_all_tasks()]
+        if security_code_verification(code):
+            print(f"\nDelete API is working, manga_id:{manga_id}")
 
-        if Current_download == manga_id or manga_id in queue_ids:
-            return {
-                "data": False,
-                "code": 434,
-            }  # 434: 删除的漫画是当前下载中的或者在队列中，无法删除
+            queue_ids = [task["manga_id"] for task in Q.get_all_tasks()]
 
-        manga_name = manga_library[manga_id]["manga_name"]
-        delete_path = f"{download_root_folder_path}/{manga_name}${manga_id}"
+            if Current_download == manga_id or manga_id in queue_ids:
+                return {
+                    "data": False,
+                    "code": 434,
+                }  # 434: 删除的漫画是当前下载中的或者在队列中，无法删除
 
-        try:
-            shutil.rmtree(delete_path)
-            del manga_library[manga_id]
+            manga_name = manga_library[manga_id]["manga_name"]
+            delete_path = f"{download_root_folder_path}/{manga_name}${manga_id}"
 
-            with open(LIB_PATH, "w", encoding="utf8") as f:
-                json_tmp = json.dumps(manga_library, indent=4, ensure_ascii=False)
-                f.write(json_tmp)
+            try:
+                shutil.rmtree(delete_path)
+                del manga_library[manga_id]
 
-            return {"data": True, "code": 200}
-        except Exception as e:
-            print(e)
-            return {"data": False, "code": 424}
+                with open(LIB_PATH, "w", encoding="utf8") as f:
+                    json_tmp = json.dumps(manga_library, indent=4, ensure_ascii=False)
+                    f.write(json_tmp)
+
+                return {"data": True, "code": 200}
+            except Exception as e:
+                print(e)
+                return {"data": False, "code": 424}
+        else:
+            return {"data": "Security code is wrong", "code": 401}, 401
 
 
 class ThumbnailGetter(Resource):
