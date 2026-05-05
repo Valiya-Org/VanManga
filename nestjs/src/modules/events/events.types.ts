@@ -25,12 +25,20 @@ export interface CompleteInfoPayload {
   message?: string;
 }
 
+/** Sent when a manga turns out to be DMCA-restricted at the source.
+ *  Originates from the 2.1-dev evolution branch (errorCode 504). */
+export interface DmcaAlertPayload {
+  mangaId: string;
+  mangaName: string;
+}
+
 /** Event name constants — keep aligned with the Vue frontend listeners. */
 export const SOCKET_EVENTS = {
   DOWNLOADING: 'downloading_info',
   PROGRESS: 'response',
   COMPLETE: 'complete_info',
   SCAN_COMPLETED: 'scan_completed',
+  DMCA_ALERT: 'dmca_alert',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];

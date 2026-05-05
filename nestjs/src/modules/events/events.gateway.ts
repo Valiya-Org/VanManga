@@ -10,6 +10,7 @@ import type { Server, Socket } from 'socket.io';
 import {
   ChapterProgressPayload,
   CompleteInfoPayload,
+  DmcaAlertPayload,
   DownloadingInfoPayload,
   SOCKET_EVENTS,
 } from './events.types';
@@ -56,5 +57,10 @@ export class EventsGateway
   /** Emits 'scan_completed' — replaces socketio.emit('scan_completed') */
   emitScanCompleted(): void {
     this.server.emit(SOCKET_EVENTS.SCAN_COMPLETED);
+  }
+
+  /** Emits 'dmca_alert' — used when scraper returns errorCode 504. */
+  emitDmcaAlert(payload: DmcaAlertPayload): void {
+    this.server.emit(SOCKET_EVENTS.DMCA_ALERT, payload);
   }
 }

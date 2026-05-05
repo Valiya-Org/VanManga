@@ -1,7 +1,7 @@
 .venv
 .claude/
 downloaded
-modules/__pycache__
+**/__pycache__/
 /thumbnails/
 .idea
 /threadTest.py

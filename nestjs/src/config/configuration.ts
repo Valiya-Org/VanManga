@@ -30,6 +30,16 @@ export interface AppConfig {
     url: string;
     enabled: boolean;
   };
+  python: {
+    /** Python interpreter — default `python` on PATH. */
+    executable: string;
+    /** Path to scrape_cli.py — defaults to ../scrape_cli.py at repo root. */
+    cliScript: string;
+    /** Working directory the CLI is launched in (must contain modules/). */
+    workingDir: string;
+    /** Hard timeout per CLI invocation (ms). */
+    timeoutMs: number;
+  };
 }
 
 export default (): AppConfig => {
@@ -68,6 +78,12 @@ export default (): AppConfig => {
     flaresolverr: {
       url: flaresolverrUrl,
       enabled: flaresolverrUrl.length > 0,
+    },
+    python: {
+      executable: process.env.PYTHON_EXECUTABLE ?? 'python',
+      cliScript: resolve(process.env.PYTHON_CLI_SCRIPT ?? '../scrape_cli.py'),
+      workingDir: resolve(process.env.PYTHON_WORKING_DIR ?? '..'),
+      timeoutMs: parseInt(process.env.PYTHON_TIMEOUT_MS ?? '180000', 10),
     },
   };
 };

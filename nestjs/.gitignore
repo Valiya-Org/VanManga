@@ -28,3 +28,8 @@ npm-debug.log*
 # temp directory
 .temp
 .tmp
+
+# runtime data (created on first launch)
+/eng_config
+/thumbnails
+/downloaded
