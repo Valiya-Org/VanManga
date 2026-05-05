@@ -1,4 +1,5 @@
 .venv
+.claude/
 downloaded
 modules/__pycache__
 /thumbnails/
