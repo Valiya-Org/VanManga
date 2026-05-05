@@ -1,0 +1,33 @@
+version: '3'
+services:
+  vanmanga:
+    image: vanmanga2.0:latest
+    networks:
+      - vannetwork
+    ports:
+      - "5001:5001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLARESOLVERR_URL=http://21flare:8191/v1
+#    volumes:
+#      - /var/log/webapp:/app/logs
+#      - /var/data/webapp:/app/data
+
+  21flare:
+    image: 21hsmw/flaresolverr:nodriver
+    networks:
+      - vannetwork
+    ports:
+      - "8191:8191"
+      - "8192:8192"
+    environment:
+      - LOG_LEVEL=debug
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=Europe/Paris
+      - DRIVER=nodriver
+      - NAME_SERVERS=1.1.1.1
+
+networks:
+  vannetwork:
+    driver: bridge

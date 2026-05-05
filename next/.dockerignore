@@ -1,0 +1,13 @@
+.env
+.git/
+.gitignore
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+manga/
+logs/*.log
+logs/*.gz
+*.db
+frontend_src/

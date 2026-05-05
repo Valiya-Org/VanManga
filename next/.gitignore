@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+data/
+manga/
+logs/*.log
+logs/*.log.*
+*.db

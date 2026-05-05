@@ -1,0 +1,26 @@
+services:
+  vanmanga-next:
+    build: .
+    image: vanmanga-next:latest
+    container_name: vanmanga-next
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+
+    # ── 持久化卷 ──────────────────────────────────────────────────────────────
+    volumes:
+      - ./data:/app/data        # SQLite 数据库
+      - ./manga:/app/manga      # 下载的漫画文件
+      - ./logs:/app/logs        # 日志文件
+
+    # ── 路径配置（覆盖 .env 中的默认值，使其指向容器内卷路径）──────────────────
+    environment:
+      DATABASE_PATH: /app/data/vanmanga.db
+      MANGA_BASE_PATH: /app/manga
+      LOG_PATH: /app/logs/app.log
+
+    # ── 其余配置从 .env 文件读取 ──────────────────────────────────────────────
+    # AUTH_MODE, ADMIN_TOKEN, JWT_* 等敏感配置在 .env 中设置，不写入 compose
+    env_file:
+      - path: .env
+        required: false         # 没有 .env 时仍可启动（使用全部默认值）
