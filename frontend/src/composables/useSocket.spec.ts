@@ -18,32 +18,52 @@ vi.mock('socket.io-client', () => ({
 
 import { useSocket } from './useSocket';
 
+beforeEach(() => {
+  socketStub.on.mockClear();
+  socketStub.off.mockClear();
+  socketStub.connect.mockClear();
+  socketStub.disconnect.mockClear();
+  socketStub.connected = false;
+});
+
 describe('useSocket', () => {
-  beforeEach(() => {
-    ioMock.mockClear();
-    socketStub.connect.mockClear();
-    socketStub.disconnect.mockClear();
+  it('returns the same shared socket instance across calls (singleton)', () => {
+    expect(useSocket().socket).toBe(useSocket().socket);
   });
 
-  it('creates a socket with autoConnect disabled', () => {
+  it('creates the underlying socket exactly once, with autoConnect disabled', () => {
     useSocket();
+    useSocket();
+    // io is only ever invoked once for the whole module (the singleton).
     expect(ioMock).toHaveBeenCalledTimes(1);
     const options = ioMock.mock.calls[0][1] as { autoConnect: boolean };
     expect(options.autoConnect).toBe(false);
   });
 
-  it('exposes connect and disconnect that delegate to the socket', () => {
-    const { connect, disconnect } = useSocket();
-    connect();
-    expect(socketStub.connect).toHaveBeenCalledTimes(1);
-    disconnect();
-    expect(socketStub.disconnect).toHaveBeenCalledTimes(1);
+  it('on()/off() delegate to the shared socket', () => {
+    const { on, off } = useSocket();
+    const handler = vi.fn();
+    on('scan_completed', handler);
+    expect(socketStub.on).toHaveBeenCalledWith('scan_completed', handler);
+    off('scan_completed', handler);
+    expect(socketStub.off).toHaveBeenCalledWith('scan_completed', handler);
   });
 
-  it('on() registers an event handler', () => {
-    const { on } = useSocket();
-    const handler = vi.fn();
-    on('download_progress', handler);
-    expect(socketStub.on).toHaveBeenCalledWith('download_progress', handler);
+  it('reference-counts connect()/disconnect() across consumers', () => {
+    const a = useSocket();
+    const b = useSocket();
+
+    a.connect();
+    expect(socketStub.connect).toHaveBeenCalledTimes(1);
+
+    socketStub.connected = true; // simulate the connection being established
+    b.connect();
+    expect(socketStub.connect).toHaveBeenCalledTimes(1); // no second dial
+
+    a.disconnect();
+    expect(socketStub.disconnect).not.toHaveBeenCalled(); // b still holds a ref
+
+    b.disconnect();
+    expect(socketStub.disconnect).toHaveBeenCalledTimes(1);
   });
 });
