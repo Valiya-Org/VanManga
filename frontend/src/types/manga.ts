@@ -39,6 +39,12 @@ export interface DownloadSwitchData {
   currentDownloadStatus: number;
 }
 
+/** dogemanga/confirm 检测到疑似重复时返回的 data（code 409）。
+ *  调用方需以 submit_sign='1' 重新提交以强制添加。 */
+export interface DuplicateCheckData {
+  duplicates: string[];
+}
+
 /** kavita/login 成功返回的 data。 */
 export interface KavitaLoginData {
   apiKey: string;

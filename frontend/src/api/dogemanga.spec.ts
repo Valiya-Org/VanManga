@@ -63,11 +63,11 @@ describe('dogemanga api', () => {
     expect(res.data).toBe(7);
   });
 
-  it('deleteManga DELETEs /deletemanga with body in config.data', async () => {
+  it('deleteManga DELETEs /deletemanga with manga_id in config.data', async () => {
     mockDelete.mockResolvedValue({ data: { code: 200, data: null } });
-    await deleteManga(3, 'SECRETCODE0000001');
+    await deleteManga(3);
     expect(mockDelete).toHaveBeenCalledWith('dogemanga/deletemanga', {
-      data: { manga_id: 3, pwd: 'SECRETCODE0000001' },
+      data: { manga_id: 3 },
     });
   });
 

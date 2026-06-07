@@ -19,11 +19,12 @@ export async function searchManga(
 
 /**
  * 确认并提交一部漫画下载。
- * submit_sign: '0' 普通提交（可能触发 411 重复确认）；'1' 强制添加。
+ * submit_sign: '0' 普通提交（可能触发 409 重复确认，data 为 {@link DuplicateCheckData}）；
+ * '1' 强制添加；'2' 取消。
  */
 export async function confirmSelection(
   mangaObject: MangaSearchResult,
-  submitSign: '0' | '1',
+  submitSign: '0' | '1' | '2',
 ): Promise<ApiEnvelope<unknown>> {
   const res = await http.post('dogemanga/confirm', {
     manga_object: mangaObject,
@@ -44,13 +45,12 @@ export async function fetchCurrentDownload(): Promise<ApiEnvelope<number>> {
   return res.data;
 }
 
-/** 删除漫画（需管理员暗码）。 */
+/** 删除漫画。后端不校验口令，删除为非鉴权操作（与旧后端一致）。 */
 export async function deleteManga(
   mangaId: number,
-  pwd: string,
 ): Promise<ApiEnvelope<unknown>> {
   const res = await http.delete('dogemanga/deletemanga', {
-    data: { manga_id: mangaId, pwd },
+    data: { manga_id: mangaId },
   });
   return res.data;
 }
