@@ -4,11 +4,11 @@ import type { Response } from 'express';
 import type { AppConfig } from '../../config/configuration';
 
 /**
- * Handles dynamic config.js only.
+ * Serves the dynamic `/js/config.js` only.
  *
- * SPA fallback is registered as Express middleware in main.ts
- * AFTER all routes and static file serving, so it doesn't
- * intercept /css, /js, /img, /fonts, /favicon.ico requests.
+ * The SPA fallback lives in `spaFallback` (main.ts) and is gated to
+ * extension-less GET paths, so it does not shadow this route or hashed
+ * static assets — those fall through to be handled here / by serve-static.
  */
 @Controller()
 export class FrontendController {

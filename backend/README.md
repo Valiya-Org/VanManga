@@ -110,8 +110,8 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
   monitor (12 min interval, auto-added when CF is detected). Runs
   boot_scanning() on startup. Replaces Flask-APScheduler jobs in
   main.py.
-- `src/modules/frontend` — Serves the Vue SPA from
-  `frontend_static/static/` via `@nestjs/serve-static`. Dynamic
+- `src/modules/frontend` — Serves the Vue3 SPA from
+  `frontend/dist/` (Vite build output) via `@nestjs/serve-static`. Dynamic
   `/js/config.js` endpoint injects `MANGA_BASE_URL` and
   `MANGA_BASE_WEBSOCKET_URL` from environment (replaces
   `create_config_js.sh`). SPA fallback serves `index.html` for
