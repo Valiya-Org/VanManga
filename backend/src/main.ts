@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { join } from 'path';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -8,7 +7,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { STATIC_ROOT } from './modules/frontend/frontend.module';
+import { spaFallback } from './modules/frontend/spa-fallback';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -53,28 +52,10 @@ async function bootstrap(): Promise<void> {
   const doc = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, doc);
 
-  // SPA fallback — registered AFTER all NestJS routes and ServeStaticModule
-  // so it only catches requests that weren't handled by API routes or static files.
-  const indexPath = join(STATIC_ROOT, 'index.html');
-  app.use(
-    (
-      req: import('express').Request,
-      res: import('express').Response,
-      next: import('express').NextFunction,
-    ) => {
-      if (
-        req.method === 'GET' &&
-        !req.path.startsWith('/api/') &&
-        !req.path.startsWith('/socket.io')
-      ) {
-        res.sendFile(indexPath, (err) => {
-          if (err) next();
-        });
-      } else {
-        next();
-      }
-    },
-  );
+  // SPA fallback — serve index.html for client-side routes only.
+  // Gated (see spaFallback) to extension-less GET paths so backend routes
+  // like /js/config.js and hashed static assets are not shadowed.
+  app.use(spaFallback);
 
   const config = app.get(ConfigService);
   const port = config.get<number>('port', 5000);
