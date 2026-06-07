@@ -3,35 +3,37 @@ import {
   ConflictException,
   Controller,
   Delete,
-  forwardRef,
   Get,
   HttpStatus,
-  Inject,
   NotFoundException,
   Param,
   Post,
   Query,
   Res,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Response } from 'express';
+import {
+  MANGA_ADDED,
+  type MangaAddedEvent,
+} from '../../common/events/app.events';
+import { TaskQueueService } from '../download/queue/task-queue.service';
+import { ThumbnailService } from '../filesystem/thumbnail.service';
 import { AddMangaDto, PaginationQueryDto } from './dto';
 import { LibraryService } from './library.service';
-import { ThumbnailService } from '../filesystem/thumbnail.service';
-import { DownloadService } from '../download/download.service';
 
 /** Library REST surface.
  *
  *  Each handler is mounted at TWO paths:
  *   - `/api/library/*` — source-agnostic, future-facing
- *   - `/api/dogemanga/*` — legacy path the Vue frontend still calls
- *  Stage 6 will collapse the frontend to the new prefix. */
+ *   - `/api/dogemanga/*` — legacy path the Vue frontend still calls */
 @Controller()
 export class LibraryController {
   constructor(
     private readonly library: LibraryService,
     private readonly thumbnails: ThumbnailService,
-    @Inject(forwardRef(() => DownloadService))
-    private readonly download: DownloadService,
+    private readonly taskQueue: TaskQueueService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ---------- list / pagination ----------
@@ -102,7 +104,12 @@ export class LibraryController {
       case 'exists':
         return { data: 'already-in-library', code: 200 };
       case 'added':
-        return { data: outcome.manga, code: 200 };
+        // Notify DownloadService to queue download via event —
+        // mirrors Flask DogePost which calls Q.add_task() after adding.
+        this.eventEmitter.emit(MANGA_ADDED, {
+          mangaId: outcome.manga!.manga_id,
+        } satisfies MangaAddedEvent);
+        return { data: 'submitted', code: 200 };
     }
   }
 
@@ -133,9 +140,7 @@ export class LibraryController {
   }
 
   private async runDelete(mangaId: string) {
-    if (this.download.isMangaBusy(mangaId)) {
-      // Mirrors main.py:DogeDeleteManga code 434 — refuses delete while
-      // the manga is downloading or queued.
+    if (this.taskQueue.isMangaBusy(mangaId)) {
       throw new ConflictException({ data: false, code: 434 });
     }
     const ok = await this.library.deleteManga(mangaId);

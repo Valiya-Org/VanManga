@@ -1,6 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AppConfig } from '../../config/configuration';
+import {
+  DOWNLOAD_COMPLETED,
+  type DownloadCompletedEvent,
+} from '../../common/events/app.events';
 import { EventsGateway } from '../events/events.gateway';
 import { ArchiveService } from '../filesystem/archive.service';
 import { FilesystemService } from '../filesystem/filesystem.service';
@@ -42,6 +47,7 @@ export class DownloadOrchestratorService implements OnModuleInit {
     private readonly fsService: FilesystemService,
     private readonly archive: ArchiveService,
     private readonly library: LibraryService,
+    private readonly eventEmitter: EventEmitter2,
     private readonly events: EventsGateway,
     private readonly config: ConfigService<AppConfig, true>,
   ) {
@@ -109,8 +115,11 @@ export class DownloadOrchestratorService implements OnModuleInit {
       success: true,
     });
 
-    // Kavita scan hook — wired by KavitaService in Stage 5.
-    // Until then, this is a no-op.
+    // Notify listeners (KavitaService) that download finished
+    this.eventEmitter.emit(DOWNLOAD_COMPLETED, {
+      mangaId: manga.manga_id,
+      mangaName: manga.manga_name,
+    } satisfies DownloadCompletedEvent);
   }
 
   // -------------------------------------------- REDOWNLOAD

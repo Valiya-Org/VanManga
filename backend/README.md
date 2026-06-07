@@ -49,9 +49,9 @@ events are source-agnostic; new sources plug in without touching them.
 | 2     | ScraperModule (Python subprocess + multi-source registry) | Done     |
 | 3     | LibraryModule (manga_library.json repository, dedup, pagination, CRUD) | Done |
 | 4     | DownloadModule (in-memory FIFO queue, image downloader, orchestrator) | Done |
-| 5     | SchedulerModule + KavitaModule                        | Pending  |
-| 6     | Static frontend wiring + endpoint parity              | Pending  |
-| 7     | Optional: Prisma + SQLite, Swagger, tests             | Pending  |
+| 5     | SchedulerModule + KavitaModule                        | Done     |
+| 6     | Static frontend wiring + endpoint parity              | Done     |
+| 7     | Swagger API docs, unit tests (22 passing)             | Done     |
 
 ## Local development
 
@@ -98,3 +98,21 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
   `modules/DGmanga.py:download_img`. Routes under `/api/download/*`
   (new) and `/api/dogemanga/{confirmdownload,redownload,cdl,dlqueue,
   rezip,confirmmanga}` (legacy).
+- `src/modules/kavita` — Kavita server integration. Authenticate via
+  Plugin API, sync kavita_url into library (every 6h), trigger folder
+  scan after download completes, proxy login/refresh-token for the
+  frontend. Replaces `utils/kavita_lib_pull.py`,
+  `utils/kavita_scan_folder.py`, `KavitaStatus/KavitaLogin/
+  KavitaRefreshToken` Flask resources. Routes under `/api/kavita/*`.
+- `src/modules/scheduler` — Scheduled tasks via `@nestjs/schedule`.
+  Daily scan (01:30 cron) checks all ongoing manga for new chapters
+  and enqueues downloads. Kavita sync every 6 hours. Dynamic CF
+  monitor (12 min interval, auto-added when CF is detected). Runs
+  boot_scanning() on startup. Replaces Flask-APScheduler jobs in
+  main.py.
+- `src/modules/frontend` — Serves the Vue SPA from
+  `frontend_static/static/` via `@nestjs/serve-static`. Dynamic
+  `/js/config.js` endpoint injects `MANGA_BASE_URL` and
+  `MANGA_BASE_WEBSOCKET_URL` from environment (replaces
+  `create_config_js.sh`). SPA fallback serves `index.html` for
+  client-side routes.

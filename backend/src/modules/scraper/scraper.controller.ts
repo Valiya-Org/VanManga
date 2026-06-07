@@ -1,10 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ScraperService } from './scraper.service';
 
-/** Debug-only routes that expose the scraper through HTTP — useful for
- *  validating the Python subprocess pipeline before the LibraryModule
- *  and DownloadModule land. Real production routes will live in those
- *  feature modules. */
 @Controller('scraper')
 export class ScraperController {
   constructor(private readonly scraper: ScraperService) {}

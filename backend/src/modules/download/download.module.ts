@@ -1,5 +1,5 @@
 import { HttpModule } from '@nestjs/axios';
-import { forwardRef, Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { LibraryModule } from '../library/library.module';
 import { ScraperModule } from '../scraper/scraper.module';
 import { DownloadController } from './download.controller';
@@ -8,13 +8,14 @@ import { DownloadService } from './download.service';
 import { ImageDownloaderService } from './image-downloader.service';
 import { TaskQueueService } from './queue/task-queue.service';
 
+@Global()
 @Module({
   imports: [
     HttpModule.register({
       timeout: 30_000,
       maxRedirects: 5,
     }),
-    forwardRef(() => LibraryModule),
+    LibraryModule,
     ScraperModule,
   ],
   controllers: [DownloadController],

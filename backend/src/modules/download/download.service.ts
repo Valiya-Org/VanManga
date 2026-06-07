@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import {
+  MANGA_ADDED,
+  type MangaAddedEvent,
+} from '../../common/events/app.events';
 import { LibraryService } from '../library/library.service';
 import { TaskQueueService } from './queue/task-queue.service';
 import {
@@ -14,10 +19,19 @@ import {
  *  should never reach into the orchestrator directly. */
 @Injectable()
 export class DownloadService {
+  private readonly logger = new Logger(DownloadService.name);
+
   constructor(
     private readonly queue: TaskQueueService,
     private readonly library: LibraryService,
   ) {}
+
+  /** React to manga being added to library — auto-queue download. */
+  @OnEvent(MANGA_ADDED)
+  handleMangaAdded(event: MangaAddedEvent): void {
+    this.logger.log(`Manga added event: queuing download for ${event.mangaId}`);
+    this.submitFullManga(event.mangaId);
+  }
 
   submitFullManga(mangaId: string): TaskHandle {
     if (!this.library.has(mangaId)) {
