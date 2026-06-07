@@ -55,7 +55,7 @@ async function bootstrap(): Promise<void> {
 
   // SPA fallback — registered AFTER all NestJS routes and ServeStaticModule
   // so it only catches requests that weren't handled by API routes or static files.
-  const indexPath = join(STATIC_ROOT, 'templates', 'index.html');
+  const indexPath = join(STATIC_ROOT, 'index.html');
   app.use(
     (
       req: import('express').Request,

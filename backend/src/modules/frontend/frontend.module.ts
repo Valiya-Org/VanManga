@@ -4,18 +4,20 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { resolve } from 'path';
 import { FrontendController } from './frontend.controller';
 
+// __dirname at runtime = backend/dist/modules/frontend → up 4 = repo root.
+// Vite outputs the SPA to <root>/frontend/dist (index.html + assets/).
 const STATIC_ROOT = resolve(
-  __dirname, '..', '..', '..', '..', 'frontend_static', 'static',
+  __dirname, '..', '..', '..', '..', 'frontend', 'dist',
 );
 
 /**
- * Serves the Vue SPA frontend from `frontend_static/static/`.
+ * Serves the Vue3 SPA frontend from `frontend/dist/` (Vite build output).
  *
- * Directory layout (from Flask's perspective):
- *   static_folder  = frontend_static/static/       → css/, js/, img/, fonts/, favicon.ico
- *   template_folder = frontend_static/static/templates/ → index.html
+ * Directory layout:
+ *   rootPath = frontend/dist/         → index.html at the dist root
+ *   assets   = frontend/dist/assets/  → hashed js/css/img bundles
  *
- * ServeStaticModule handles the static assets (css, js, etc.).
+ * ServeStaticModule handles the static assets (assets/, favicon, etc.).
  * FrontendController handles:
  *   - GET /js/config.js   → dynamic env injection
  *   - GET /               → index.html
@@ -28,7 +30,7 @@ const STATIC_ROOT = resolve(
       rootPath: STATIC_ROOT,
       exclude: ['/api{/*path}'],
       // Don't serve index.html automatically — we handle SPA fallback
-      // in FrontendController to point at templates/index.html
+      // in FrontendController to point at frontend/dist/index.html
       serveStaticOptions: {
         index: false,
         fallthrough: true,
