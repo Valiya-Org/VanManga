@@ -558,6 +558,7 @@ class DogePost(Resource):
                 potential_matches = duplicate_check(manga_name, manga_library)
 
                 if potential_matches:
+
                     return {"data": potential_matches, "code": 411}
                 else:
                     manga_library[manga_id] = make_manga_object(manga_object)

@@ -1,0 +1,27 @@
+2026-05-01 00:03:16 INFO     app.core.events  VanManga Next starting up...
+2026-05-01 00:03:16 WARNING  passlib.handlers.bcrypt  (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "F:\2026\Valiya\vanmanga-next\.venv\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2026-05-01 00:06:06 INFO     app.core.events  VanManga Next starting up...
+2026-05-01 00:06:06 WARNING  app.core.auth.token_auth  ============================================================
+2026-05-01 00:06:06 WARNING  app.core.auth.token_auth  Admin Token (shown once — store it safely):
+2026-05-01 00:06:06 WARNING  app.core.auth.token_auth    7tJdJHV0E_eZHCJhc8-cBkUQXlgZDCfZi4TrqGxjiLw
+2026-05-01 00:06:06 WARNING  app.core.auth.token_auth  ============================================================
+2026-05-01 00:06:07 INFO     app.services.queue_manager  Queue recovery complete
+2026-05-01 00:06:07 INFO     apscheduler.scheduler  Scheduler started
+2026-05-01 00:06:07 INFO     apscheduler.scheduler  Added job "SchedulerService._run_auto_update" to job store "default"
+2026-05-01 00:06:07 INFO     app.services.scheduler  Auto-update scheduled at 01:30 UTC
+2026-05-01 00:06:07 INFO     app.services.scheduler  Scheduler started
+2026-05-01 00:06:07 INFO     app.core.events  VanManga Next ready.
+2026-05-01 00:21:20 INFO     app.core.events  VanManga Next shutting down...
+2026-05-01 00:21:20 INFO     apscheduler.scheduler  Scheduler has been shut down
+2026-05-01 00:21:25 INFO     app.core.events  VanManga Next starting up...
+2026-05-01 00:21:25 INFO     app.services.queue_manager  Queue recovery complete
+2026-05-01 00:21:25 INFO     apscheduler.scheduler  Scheduler started
+2026-05-01 00:21:25 INFO     apscheduler.scheduler  Added job "SchedulerService._run_auto_update" to job store "default"
+2026-05-01 00:21:25 INFO     app.services.scheduler  Auto-update scheduled at 01:30 UTC
+2026-05-01 00:21:25 INFO     app.services.scheduler  Scheduler started
+2026-05-01 00:21:25 INFO     app.core.events  VanManga Next ready.
