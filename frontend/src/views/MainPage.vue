@@ -28,7 +28,7 @@ function handleCollapse(): void {
   isCollapse.value = !isCollapse.value;
 }
 
-const { connect, disconnect, on } = useSocket();
+const { connect, disconnect, on, off } = useSocket();
 function onScanCompleted(): void {
   notifyError(
     '全盘扫描完成',
@@ -41,6 +41,7 @@ onMounted(() => {
   connect();
 });
 onUnmounted(() => {
+  off('scan_completed', onScanCompleted);
   disconnect();
 });
 </script>
