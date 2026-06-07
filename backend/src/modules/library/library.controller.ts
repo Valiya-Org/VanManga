@@ -19,7 +19,7 @@ import {
 } from '../../common/events/app.events';
 import { TaskQueueService } from '../download/queue/task-queue.service';
 import { ThumbnailService } from '../filesystem/thumbnail.service';
-import { AddMangaDto, PaginationQueryDto } from './dto';
+import { AddMangaDto, ConfirmMangaLegacyDto, PaginationQueryDto } from './dto';
 import { LibraryService } from './library.service';
 
 /** Library REST surface.
@@ -90,8 +90,10 @@ export class LibraryController {
   }
 
   @Post('dogemanga/confirm')
-  async addLegacy(@Body() body: AddMangaDto) {
-    return this.runAdd(body);
+  async addLegacy(@Body() body: ConfirmMangaLegacyDto) {
+    // The Vue frontend nests the candidate under `manga_object` and sends
+    // `submit_sign` as a sibling; flatten to the AddMangaDto shape runAdd expects.
+    return this.runAdd({ ...body.manga_object, submit_sign: body.submit_sign });
   }
 
   private async runAdd(body: AddMangaDto) {
