@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { ElIcon } from 'element-plus';
 import { WarningFilled } from '@element-plus/icons-vue';
 
 const isHover = ref(false);
@@ -112,7 +111,7 @@ defineExpose({ isHover, isClicked });
 .announceShow-enter-active,.announceShow-leave-active{
   transition: all .1s ease-in-out;
 }
-.announceShow-enter,.announceShow-leave-to{
+.announceShow-enter-from,.announceShow-leave-to{
   transform: translateY(30px);
   opacity: 0;
 
