@@ -85,7 +85,7 @@ export class DownloadOrchestratorService implements OnModuleInit {
       return;
     }
 
-    this.events.emitDownloading({ mangaId: manga.manga_id });
+    this.events.emitDownloading(manga.manga_id);
 
     const list = await this.scraper.getChapters(sourceName, manga.manga_id);
     if (await this.handleChapterListSentinel(list, manga)) return;
@@ -109,11 +109,7 @@ export class DownloadOrchestratorService implements OnModuleInit {
     }
     await this.library.patch(manga.manga_id, patch);
 
-    this.events.emitComplete({
-      mangaId: manga.manga_id,
-      mangaName: manga.manga_name,
-      success: true,
-    });
+    this.events.emitComplete({ manga_id: manga.manga_id });
 
     // Notify listeners (KavitaService) that download finished
     this.eventEmitter.emit(DOWNLOAD_COMPLETED, {
@@ -128,15 +124,11 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const manga = this.library.get(payload.mangaId);
     const sourceName = manga.source ?? 'dgmanga';
 
-    this.events.emitDownloading({ mangaId: manga.manga_id });
+    this.events.emitDownloading(manga.manga_id);
     await this.processChapters(manga, sourceName, payload.chapters, {
       updateLastEpi: false,
     });
-    this.events.emitComplete({
-      mangaId: manga.manga_id,
-      mangaName: manga.manga_name,
-      success: true,
-    });
+    this.events.emitComplete({ manga_id: manga.manga_id });
   }
 
   // -------------------------------------------- REZIP
@@ -212,26 +204,8 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const safeTitle = this.sanitiseTitle(chapter.title);
     const chapterDir = this.fsService.chapterDir(innerDir, safeTitle);
 
-    this.events.emitProgress({
-      mangaId: manga.manga_id,
-      mangaName: manga.manga_name,
-      chapterTitle: safeTitle,
-      current: chapter.index,
-      total: 0,
-      status: 'downloading',
-    });
-
     const images = await this.scraper.getChapterImages(sourceName, chapter.url);
     if (images.errorCode) {
-      this.events.emitProgress({
-        mangaId: manga.manga_id,
-        mangaName: manga.manga_name,
-        chapterTitle: safeTitle,
-        current: chapter.index,
-        total: 0,
-        status: 'failed',
-        message: `errorCode=${images.errorCode}`,
-      });
       throw new Error(
         `chapter scrape returned errorCode=${images.errorCode}`,
       );
@@ -261,17 +235,14 @@ export class DownloadOrchestratorService implements OnModuleInit {
           last_epi: chapter.index,
           last_epi_name: safeTitle,
         });
+        // 'response' — tell the frontend this manga's newest episode advanced.
+        this.events.emitResponse({
+          manga_id: manga.manga_id,
+          last_epi_name: safeTitle,
+          last_epi: chapter.index,
+        });
       }
     }
-
-    this.events.emitProgress({
-      mangaId: manga.manga_id,
-      mangaName: manga.manga_name,
-      chapterTitle: safeTitle,
-      current: chapter.index,
-      total: jobs.length,
-      status: 'finished',
-    });
   }
 
   // -------------------------------------------- helpers
@@ -324,8 +295,8 @@ export class DownloadOrchestratorService implements OnModuleInit {
       );
     }
     this.events.emitDmcaAlert({
-      mangaId: manga.manga_id,
-      mangaName: manga.manga_name,
+      manga_id: manga.manga_id,
+      manga_name: manga.manga_name,
     });
   }
 

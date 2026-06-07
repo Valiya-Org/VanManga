@@ -20,18 +20,16 @@ export class DownloadController {
 
   // ---------- submit full manga ----------
 
+  /** Manually (re)queue a full-manga download for an already-added manga.
+   *
+   *  Note: the legacy `/dogemanga/confirm` add flow already auto-queues the
+   *  download via the MANGA_ADDED event (see LibraryController.runAdd →
+   *  DownloadService.@OnEvent(MANGA_ADDED)), mirroring the old Flask DogePost
+   *  which added AND queued in one call. There is deliberately NO
+   *  `/dogemanga/confirmdownload` route — adding one back would double-queue
+   *  every newly-added manga. */
   @Post('download')
   submitNew(@Body() body: SubmitFullDownloadDto) {
-    const handle = this.download.submitFullManga(body.manga_id);
-    return { data: { taskId: handle.id }, code: 200 };
-  }
-
-  /** Legacy: confirm acted as both library-add AND download trigger.
-   *  We split: LibraryController handles the add; this endpoint queues
-   *  the download for an already-added manga. The Vue frontend invokes
-   *  both in sequence. */
-  @Post('dogemanga/confirmdownload')
-  submitLegacy(@Body() body: SubmitFullDownloadDto) {
     const handle = this.download.submitFullManga(body.manga_id);
     return { data: { taskId: handle.id }, code: 200 };
   }

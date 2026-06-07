@@ -8,10 +8,9 @@ import {
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import {
-  ChapterProgressPayload,
   CompleteInfoPayload,
   DmcaAlertPayload,
-  DownloadingInfoPayload,
+  ResponsePayload,
   SOCKET_EVENTS,
 } from './events.types';
 
@@ -39,14 +38,16 @@ export class EventsGateway
     this.logger.debug(`client disconnected: ${client.id}`);
   }
 
-  /** Emits 'downloading_info' — replaces socketio.emit('downloading_info', ...) */
-  emitDownloading(payload: DownloadingInfoPayload): void {
-    this.server.emit(SOCKET_EVENTS.DOWNLOADING, payload);
+  /** Emits 'downloading_info' with a BARE manga_id string — replaces
+   *  socketio.emit('downloading_info', manga_id). */
+  emitDownloading(mangaId: string): void {
+    this.server.emit(SOCKET_EVENTS.DOWNLOADING, mangaId);
   }
 
-  /** Emits 'response' — replaces socketio.emit('response', ...) */
-  emitProgress(payload: ChapterProgressPayload): void {
-    this.server.emit(SOCKET_EVENTS.PROGRESS, payload);
+  /** Emits 'response' — the newest downloaded episode advanced.
+   *  Replaces socketio.emit('response', { manga_id, ... }). */
+  emitResponse(payload: ResponsePayload): void {
+    this.server.emit(SOCKET_EVENTS.RESPONSE, payload);
   }
 
   /** Emits 'complete_info' — replaces socketio.emit('complete_info', ...) */

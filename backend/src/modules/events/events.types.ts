@@ -1,41 +1,37 @@
-/** Mirrors the WebSocket payload shape used by the legacy Flask backend. */
+/** WebSocket payload shapes. These match the field names the Vue frontend
+ *  actually reads in its socket handlers (snake_case), which is the real
+ *  contract — note the legacy Flask backend emitted `response` with
+ *  `newest_epi*` keys the frontend never read, a latent bug fixed here by
+ *  emitting the keys the frontend consumes. */
 
-/** Sent from main.py:265 / main.py:395 — emitted right before a download starts. */
-export interface DownloadingInfoPayload {
-  mangaId: string;
+/** 'response' — emitted when a manga's newest downloaded episode advances.
+ *  Frontend updates the library row's `last_epi` / `last_epi_name`
+ *  (see old MangaKu.vue `sockets.response`). */
+export interface ResponsePayload {
+  manga_id: string;
+  last_epi_name: string;
+  last_epi: number;
 }
 
-/** Sent from main.py:337 / main.py:447 — fine-grained chapter progress. */
-export interface ChapterProgressPayload {
-  mangaId: string;
-  mangaName: string;
-  chapterTitle: string;
-  current: number;
-  total: number;
-  status: 'downloading' | 'finished' | 'failed';
-  message?: string;
-}
-
-/** Sent from main.py:346 / main.py:454 — overall download completion. */
+/** 'complete_info' — a manga finished all of its current downloads.
+ *  Frontend only reads `manga_id` (see old MangaKu.vue `sockets.complete_info`). */
 export interface CompleteInfoPayload {
-  mangaId: string;
-  mangaName: string;
-  success: boolean;
-  failedChapters?: string[];
-  message?: string;
+  manga_id: string;
 }
 
-/** Sent when a manga turns out to be DMCA-restricted at the source.
- *  Originates from the 2.1-dev evolution branch (errorCode 504). */
+/** 'dmca_alert' — a manga turned out to be DMCA-restricted at the source
+ *  (errorCode 504). Not part of the legacy contract; kept for the 2.1-dev UI. */
 export interface DmcaAlertPayload {
-  mangaId: string;
-  mangaName: string;
+  manga_id: string;
+  manga_name: string;
 }
 
-/** Event name constants — keep aligned with the Vue frontend listeners. */
+/** Event name constants — keep aligned with the Vue frontend listeners.
+ *  `downloading_info` carries a BARE manga_id string (not an object), matching
+ *  the old frontend handler `downloading_info(data){ let id = data; ... }`. */
 export const SOCKET_EVENTS = {
   DOWNLOADING: 'downloading_info',
-  PROGRESS: 'response',
+  RESPONSE: 'response',
   COMPLETE: 'complete_info',
   SCAN_COMPLETED: 'scan_completed',
   DMCA_ALERT: 'dmca_alert',
