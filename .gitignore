@@ -7,3 +7,7 @@ downloaded
 /threadTest.py
 /utils/tempTest.py
 /testAPI.py
+
+# frontend (Vite)
+/frontend/node_modules
+/frontend/dist

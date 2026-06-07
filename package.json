@@ -1,0 +1,15 @@
+{
+  "name": "vanmanga",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VanManga monorepo root — orchestrates frontend (Vue3/Vite) and backend (NestJS) builds",
+  "scripts": {
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "npm --prefix frontend install && npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend install && npm --prefix backend run build",
+    "start:prod": "npm --prefix backend run start:prod",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test:frontend": "npm --prefix frontend run test"
+  }
+}
