@@ -12,7 +12,16 @@ import { spaFallback } from './modules/frontend/spa-fallback';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
+    // Disable the built-in 100kb body parser so we can register our own with
+    // a larger limit — add-manga payloads carry a base64 cover thumbnail that
+    // routinely exceeds 100kb. Without this, oversized POSTs are rejected by
+    // the parser and fall through to the serve-static /api 404 handler
+    // ("Cannot POST /api/library").
+    bodyParser: false,
   });
+
+  app.useBodyParser('json', { limit: '25mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '25mb' });
 
   app.enableCors({ origin: true, credentials: true });
 
