@@ -117,14 +117,17 @@ def _dgmanga_chapter_images(chapter_url: str, cf: Dict[str, Any]) -> Any:
     from DrissionPage import SessionPage
 
     session = SessionPage()
+    # Hard per-request timeout so a Cloudflare hold / dead socket can't hang
+    # the whole NestJS download task until its 180s spawn timeout.
     if cf["cf_activate"]:
         session.get(
             chapter_url,
             headers={"User-Agent": cf["cf_userAgent"]},
             cookies={"cf_clearance": cf["cf_clearance_value"]},
+            timeout=30,
         )
     else:
-        session.get(chapter_url)
+        session.get(chapter_url, timeout=30)
 
     response = session.response
     if response is None:
@@ -147,9 +150,12 @@ def _dgmanga_chapter_images(chapter_url: str, cf: Dict[str, Any]) -> Any:
     for img_tag in img_collection:
         page_match = page_re.findall(img_tag.get("alt", ""))
         page_label = page_match[0] if page_match else ""
-        img_id = img_tag["data-page-image-url"].split("/")[-1]
+        # `data-page-image-url` is already the canonical, fully-qualified
+        # image URL (matches the <img src>); use it verbatim. The legacy
+        # code rebuilt it and appended `?l=zh`, but that query param belongs
+        # to the page URL, not the image asset.
         images.append(
-            {"page": page_label, "url": f"https://dogemanga.com/images/pages/{img_id}?l=zh"}
+            {"page": page_label, "url": img_tag["data-page-image-url"]}
         )
 
     headers: Dict[str, str] = {}
