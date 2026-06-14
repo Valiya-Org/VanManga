@@ -105,6 +105,10 @@ export class LibraryController {
         return { data: { duplicates: outcome.duplicates }, code: 409 };
       case 'exists':
         return { data: 'already-in-library', code: 200 };
+      case 'expired':
+        // Lean add referenced a candidate no longer in the search cache —
+        // tell the client to re-search and resubmit.
+        return { data: 'search-expired', code: 410 };
       case 'added':
         // Notify DownloadService to queue download via event —
         // mirrors Flask DogePost which calls Q.add_task() after adding.

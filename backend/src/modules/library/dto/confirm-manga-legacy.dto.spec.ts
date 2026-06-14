@@ -37,9 +37,20 @@ describe('ConfirmMangaLegacyDto', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('rejects when the nested manga_object is missing required fields', async () => {
+  it('accepts a lean manga_object with only manga_id (server fills the rest from the search cache)', async () => {
     const dto = plainToInstance(ConfirmMangaLegacyDto, {
       manga_object: { manga_id: '123' },
+      submit_sign: '1',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects when manga_id itself is missing', async () => {
+    const dto = plainToInstance(ConfirmMangaLegacyDto, {
+      manga_object: { manga_name: 'Naruto' },
       submit_sign: '1',
     });
 

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { SearchCacheService } from '../search-cache/search-cache.service';
 import {
   ChapterImagesDto,
   ChapterListResultDto,
@@ -15,14 +16,22 @@ import { SourceRegistryService } from './sources/source-registry.service';
 export class ScraperService {
   private readonly logger = new Logger(ScraperService.name);
 
-  constructor(private readonly registry: SourceRegistryService) {}
+  constructor(
+    private readonly registry: SourceRegistryService,
+    private readonly searchCache: SearchCacheService,
+  ) {}
 
   listSources(): { name: string; displayName: string }[] {
     return this.registry.describe();
   }
 
-  search(sourceName: string, query: string): Promise<SearchResultDto[]> {
-    return this.registry.get(sourceName).search(query);
+  async search(sourceName: string, query: string): Promise<SearchResultDto[]> {
+    const results = await this.registry.get(sourceName).search(query);
+    // Cache candidates so a later add can resolve the full record (incl. the
+    // base64 thumbnail) from just {source, manga_id} — no round-tripping the
+    // image back through the client.
+    this.searchCache.putMany(results);
+    return results;
   }
 
   getMetadata(sourceName: string, mangaId: string): Promise<MangaMetadataDto> {

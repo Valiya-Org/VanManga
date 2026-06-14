@@ -2,12 +2,21 @@ import { Injectable } from '@nestjs/common';
 import type { AddMangaDto } from '../dto';
 import type { Manga } from '../entities/manga.entity';
 
+/** A candidate with the descriptive fields guaranteed present (the add
+ *  pipeline resolves them from the request or the search cache first). */
+type ResolvedCandidate = AddMangaDto & {
+  manga_name: string;
+  artist_name: string;
+  newest_epi: string;
+  thumbnail: string;
+};
+
 /** Replaces utils/make_manga_object.py:make_manga_object.
  *  Hydrates user-submitted candidate data into a fully-formed Manga
  *  with sensible defaults. */
 @Injectable()
 export class MangaFactoryService {
-  build(candidate: AddMangaDto): Manga {
+  build(candidate: ResolvedCandidate): Manga {
     return {
       manga_id: candidate.manga_id,
       manga_name: candidate.manga_name,

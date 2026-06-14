@@ -8,6 +8,7 @@ import { join } from 'path';
 import type { AppConfig } from '../../config/configuration';
 import { FilesystemService } from '../filesystem/filesystem.service';
 import { ThumbnailService } from '../filesystem/thumbnail.service';
+import { SearchCacheService } from '../search-cache/search-cache.service';
 import {
   AddMangaDto,
   DuplicateCheckResponseDto,
@@ -21,10 +22,19 @@ import { MangaFactoryService } from './services/manga-factory.service';
 import { PaginationService } from './services/pagination.service';
 
 export interface AddMangaOutcome {
-  status: 'added' | 'duplicate' | 'cancelled' | 'exists';
+  status: 'added' | 'duplicate' | 'cancelled' | 'exists' | 'expired';
   manga?: Manga;
   duplicates?: string[];
 }
+
+/** A candidate with every field the add pipeline needs guaranteed present —
+ *  either supplied in full by the client or filled in from the search cache. */
+type ResolvedCandidate = AddMangaDto & {
+  manga_name: string;
+  artist_name: string;
+  newest_epi: string;
+  thumbnail: string;
+};
 
 @Injectable()
 export class LibraryService {
@@ -38,6 +48,7 @@ export class LibraryService {
     private readonly pagination: PaginationService,
     private readonly thumbnails: ThumbnailService,
     private readonly fsService: FilesystemService,
+    private readonly searchCache: SearchCacheService,
     private readonly config: ConfigService<AppConfig, true>,
   ) {
     this.downloadRoot = this.config.get('storage.downloadRoot', {
@@ -110,16 +121,23 @@ export class LibraryService {
       return { status: 'exists', manga: this.repo.get(input.manga_id) };
     }
 
+    // Resolve the full candidate: either the client sent everything (legacy
+    // base64 payload) or we fill the gaps from the search cache (lean payload).
+    const candidate = this.resolveCandidate(input);
+    if (!candidate) {
+      return { status: 'expired' };
+    }
+
     if (input.submit_sign !== '1') {
-      const dup = this.checkDuplicates(input.manga_name);
+      const dup = this.checkDuplicates(candidate.manga_name);
       if (dup.needsConfirmation) {
         return { status: 'duplicate', duplicates: dup.duplicates };
       }
     }
 
-    const persisted = await this.thumbnails.persistAndLink(input);
+    const persisted = await this.thumbnails.persistAndLink(candidate);
     const manga = this.factory.build({
-      ...input,
+      ...candidate,
       thumbnail: persisted.thumbnail,
     });
 
@@ -128,6 +146,39 @@ export class LibraryService {
       `Added manga: ${manga.manga_name} (${manga.manga_id}) from ${manga.source}`,
     );
     return { status: 'added', manga };
+  }
+
+  /** Turn an add request into a fully-populated candidate.
+   *
+   *  Full (legacy) payloads already carry name/artist/epi/thumbnail; lean
+   *  payloads carry just the id, so we look the rest up in the search cache.
+   *  Any field the client *did* send wins over the cached value. Returns null
+   *  when a lean payload references a candidate that is no longer cached. */
+  private resolveCandidate(input: AddMangaDto): ResolvedCandidate | null {
+    if (
+      input.thumbnail &&
+      input.manga_name &&
+      input.artist_name &&
+      input.newest_epi
+    ) {
+      return input as ResolvedCandidate;
+    }
+
+    const source = input.source ?? 'dgmanga';
+    const cached = this.searchCache.get(source, input.manga_id);
+    if (!cached) return null;
+
+    return {
+      manga_id: input.manga_id,
+      manga_name: input.manga_name ?? cached.manga_name,
+      artist_name: input.artist_name ?? cached.artist_name,
+      newest_epi: input.newest_epi ?? cached.newest_epi,
+      thumbnail: input.thumbnail ?? cached.thumbnail,
+      source,
+      recent_update_date:
+        input.recent_update_date ?? cached.recent_update_date,
+      submit_sign: input.submit_sign,
+    };
   }
 
   async toggleAutoUpdate(mangaId: string): Promise<0 | 1> {

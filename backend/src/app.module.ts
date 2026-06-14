@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ConfigModule } from './config/config.module';
+import { SearchCacheModule } from './modules/search-cache/search-cache.module';
 import { FilesystemModule } from './modules/filesystem/filesystem.module';
 import { CloudflareModule } from './modules/cloudflare/cloudflare.module';
 import { EventsModule } from './modules/events/events.module';
@@ -15,6 +16,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
   imports: [
     ConfigModule,
     EventEmitterModule.forRoot(),
+    SearchCacheModule,
     FilesystemModule,
     CloudflareModule,
     EventsModule,
