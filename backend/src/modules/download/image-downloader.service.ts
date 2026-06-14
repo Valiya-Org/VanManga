@@ -1,7 +1,9 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AxiosError, AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import type { AppConfig } from '../../config/configuration';
 import { CloudflareService } from '../cloudflare/cloudflare.service';
 import { FilesystemService } from '../filesystem/filesystem.service';
 
@@ -26,24 +28,45 @@ export interface ChapterDownloadResult {
 export class ImageDownloaderService {
   private readonly logger = new Logger(ImageDownloaderService.name);
   private readonly maxRetriesPerImage = 3;
+  /** Fallback browser User-Agent. dogemanga sits behind Cloudflare and
+   *  rejects requests without a browser-like UA (the legacy DrissionPage
+   *  SessionPage always sent one). When CF is inactive both buildHeaders()
+   *  and the Python requestHeaders are empty, so axios would otherwise go
+   *  out as `axios/x.y` and get a 403. A real CF UA (when active) overrides
+   *  this. */
+  private readonly defaultUserAgent =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   /** Coordinates 429 backoff across concurrent image downloads in
    *  the same chapter — when one image hits 429, sibling downloads
    *  pause until the cooldown expires. Mirrors Error_dict[g_error_flag]
    *  in modules/DGmanga.py. */
   private cooldownUntil = 0;
 
+  /** Default concurrent image fetches per chapter (config-driven so a
+   *  future settings UI can tune it). Callers may still override per call. */
+  private readonly defaultConcurrency: number;
+  /** Polite inter-image delay (ms); 0 disables. See AppConfig.download. */
+  private readonly imageDelayMs: number;
+
   constructor(
     private readonly http: HttpService,
     private readonly fsService: FilesystemService,
     private readonly cloudflare: CloudflareService,
-  ) {}
+    config: ConfigService<AppConfig, true>,
+  ) {
+    this.defaultConcurrency = config.get('download.imageConcurrency', {
+      infer: true,
+    });
+    this.imageDelayMs = config.get('download.imageDelayMs', { infer: true });
+  }
 
   async downloadChapter(
     chapterDir: string,
     jobs: ImageDownloadJob[],
     options: { concurrency?: number } = {},
   ): Promise<ChapterDownloadResult> {
-    const concurrency = options.concurrency ?? 4;
+    const concurrency = options.concurrency ?? this.defaultConcurrency;
     await this.fsService.ensureDir(chapterDir);
 
     const result: ChapterDownloadResult = { succeeded: [], failed: [] };
@@ -58,6 +81,11 @@ export class ImageDownloaderService {
           result.succeeded.push(job);
         } catch (err) {
           result.failed.push({ job, reason: (err as Error).message });
+        }
+        // Polite spacing between requests on this worker. Skip when no
+        // work remains so we don't tack a trailing delay onto the chapter.
+        if (cursor < jobs.length) {
+          await this.politeDelay();
         }
       }
     });
@@ -108,7 +136,12 @@ export class ImageDownloaderService {
 
   private async fetch(job: ImageDownloadJob): Promise<AxiosResponse> {
     const cfHeaders = this.cloudflare.buildHeaders();
-    const headers = { ...cfHeaders, ...(job.extraHeaders ?? {}) };
+    const headers: Record<string, string> = {
+      'User-Agent': this.defaultUserAgent,
+      Referer: 'https://dogemanga.com/',
+      ...cfHeaders,
+      ...(job.extraHeaders ?? {}),
+    };
     return firstValueFrom(
       this.http.get(job.url, {
         headers,
@@ -131,6 +164,14 @@ export class ImageDownloaderService {
     while (Date.now() < this.cooldownUntil) {
       await this.sleep(this.cooldownUntil - Date.now());
     }
+  }
+
+  /** Polite delay between successive image fetches on the same worker.
+   *  base + up to 1x random jitter, mirroring the legacy
+   *  gevent.sleep(1 + rand). Disabled when imageDelayMs <= 0. */
+  private async politeDelay(): Promise<void> {
+    if (this.imageDelayMs <= 0) return;
+    await this.sleep(this.imageDelayMs + Math.random() * this.imageDelayMs);
   }
 
   private sleep(ms: number): Promise<void> {

@@ -15,6 +15,26 @@ export interface AppConfig {
   concurrency: {
     workers: number;
   };
+  /** Image-download tuning. Exposed as discrete knobs so a future
+   *  frontend settings panel can map straight onto them. */
+  download: {
+    /** Concurrent image fetches within a single chapter. */
+    imageConcurrency: number;
+    /** Polite delay (ms) between image fetches per worker; 0 disables.
+     *  A random jitter up to the same amount is added on top, mirroring
+     *  the legacy gevent.sleep(1 + rand) between images in
+     *  modules/DGmanga.py. */
+    imageDelayMs: number;
+  };
+  /** Server-side cache of search candidates, so the frontend can submit
+   *  an "add" with just {source, manga_id} instead of echoing the base64
+   *  cover thumbnail back to the server. */
+  searchCache: {
+    /** How long a cached candidate stays resolvable (ms). */
+    ttlMs: number;
+    /** Hard cap on cached candidates (FIFO eviction beyond this). */
+    maxEntries: number;
+  };
   redis: {
     host: string;
     port: number;
@@ -63,6 +83,14 @@ export default (): AppConfig => {
     },
     concurrency: {
       workers: parseInt(process.env.NUMBER_OF_WORKERS ?? '2', 10),
+    },
+    download: {
+      imageConcurrency: parseInt(process.env.IMAGE_CONCURRENCY ?? '2', 10),
+      imageDelayMs: parseInt(process.env.IMAGE_DELAY_MS ?? '1000', 10),
+    },
+    searchCache: {
+      ttlMs: parseInt(process.env.SEARCH_CACHE_TTL_MS ?? '1800000', 10), // 30 min
+      maxEntries: parseInt(process.env.SEARCH_CACHE_MAX_ENTRIES ?? '500', 10),
     },
     redis: {
       host: process.env.REDIS_HOST ?? '127.0.0.1',
