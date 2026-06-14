@@ -217,16 +217,28 @@ export class DownloadOrchestratorService implements OnModuleInit {
       extraHeaders: images.requestHeaders,
     }));
 
+    this.logger.log(
+      `Chapter '${safeTitle}': downloading ${jobs.length} image(s)...`,
+    );
+
     const result = await this.imageDownloader.downloadChapter(chapterDir, jobs);
     if (result.failed.length > 0) {
+      const sample = result.failed[0];
       this.logger.warn(
-        `Chapter '${safeTitle}': ${result.failed.length}/${jobs.length} images failed`,
+        `Chapter '${safeTitle}': ${result.failed.length}/${jobs.length} images failed; ` +
+          `first failure: ${sample.reason} (url=${sample.job.url})`,
+      );
+    } else {
+      this.logger.log(
+        `Chapter '${safeTitle}': downloaded ${result.succeeded.length}/${jobs.length} image(s), zipping...`,
       );
     }
 
     // Zip on success only (matches modules/DGmanga.py:download_img which
     // zips after the inner retry loop)
     await this.archive.zipChapter(chapterDir);
+
+    this.logger.log(`Chapter '${safeTitle}': done ✓`);
 
     if (updateLastEpi) {
       const current = this.library.get(manga.manga_id);

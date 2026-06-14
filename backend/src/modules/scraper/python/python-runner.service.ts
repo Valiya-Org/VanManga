@@ -40,12 +40,17 @@ export class PythonRunnerService {
       '--source',
       options.source,
       options.command,
+      // `--` forces argparse to treat the remaining tokens as positional
+      // args, so IDs/URLs beginning with `-` (e.g. manga_id `-LoL2tSY`)
+      // are not mis-parsed as option flags.
+      '--',
       ...options.args,
     ];
 
     this.logger.debug(
       `spawn ${executable} ${argv.join(' ')} (cwd=${cwd}, timeout=${timeoutMs}ms)`,
     );
+    const startedAt = Date.now();
 
     return new Promise<T>((resolve, reject) => {
       const child = spawn(executable, argv, {
@@ -150,6 +155,9 @@ export class PythonRunnerService {
           );
         }
 
+        this.logger.debug(
+          `done [${options.source}/${options.command}] ok (exit=${code}, ${Date.now() - startedAt}ms)`,
+        );
         settle(() => resolve(parsed.data as T));
       });
 
