@@ -48,6 +48,8 @@ export class ImageDownloaderService {
   private readonly defaultConcurrency: number;
   /** Polite inter-image delay (ms); 0 disables. See AppConfig.download. */
   private readonly imageDelayMs: number;
+  /** Progress-heartbeat cadence (ms); 0 disables. See AppConfig.download. */
+  private readonly progressIntervalMs: number;
 
   constructor(
     private readonly http: HttpService,
@@ -59,18 +61,41 @@ export class ImageDownloaderService {
       infer: true,
     });
     this.imageDelayMs = config.get('download.imageDelayMs', { infer: true });
+    this.progressIntervalMs = config.get('download.progressIntervalMs', {
+      infer: true,
+    });
   }
 
   async downloadChapter(
     chapterDir: string,
     jobs: ImageDownloadJob[],
-    options: { concurrency?: number } = {},
+    options: { concurrency?: number; label?: string } = {},
   ): Promise<ChapterDownloadResult> {
     const concurrency = options.concurrency ?? this.defaultConcurrency;
+    const label = options.label ?? 'chapter';
     await this.fsService.ensureDir(chapterDir);
 
     const result: ChapterDownloadResult = { succeeded: [], failed: [] };
+    const total = jobs.length;
     let cursor = 0;
+    let done = 0;
+
+    // Heartbeat: while a long chapter is still downloading, log progress every
+    // progressIntervalMs so it doesn't go silent. Short chapters that finish
+    // within one interval never log a tick.
+    const ticker =
+      this.progressIntervalMs > 0 && total > 0
+        ? setInterval(() => {
+            if (done < total) {
+              this.logger.log(
+                `${label}: ${done}/${total} images downloaded` +
+                  (result.failed.length
+                    ? ` (${result.failed.length} failed)`
+                    : ''),
+              );
+            }
+          }, this.progressIntervalMs)
+        : null;
 
     const workers = Array.from({ length: concurrency }, async () => {
       while (cursor < jobs.length) {
@@ -82,6 +107,7 @@ export class ImageDownloaderService {
         } catch (err) {
           result.failed.push({ job, reason: (err as Error).message });
         }
+        done += 1;
         // Polite spacing between requests on this worker. Skip when no
         // work remains so we don't tack a trailing delay onto the chapter.
         if (cursor < jobs.length) {
@@ -90,7 +116,11 @@ export class ImageDownloaderService {
       }
     });
 
-    await Promise.all(workers);
+    try {
+      await Promise.all(workers);
+    } finally {
+      if (ticker) clearInterval(ticker);
+    }
     return result;
   }
 

@@ -86,6 +86,9 @@ export class DownloadOrchestratorService implements OnModuleInit {
     }
 
     this.events.emitDownloading(manga.manga_id);
+    this.logger.log(
+      `=== DOWNLOAD START: ${manga.manga_name} (${manga.manga_id}) ===`,
+    );
 
     const list = await this.scraper.getChapters(sourceName, manga.manga_id);
     if (await this.handleChapterListSentinel(list, manga)) return;
@@ -110,6 +113,9 @@ export class DownloadOrchestratorService implements OnModuleInit {
     await this.library.patch(manga.manga_id, patch);
 
     this.events.emitComplete({ manga_id: manga.manga_id });
+    this.logger.log(
+      `=== DOWNLOAD DONE: ${manga.manga_name} (${manga.manga_id}) ===`,
+    );
 
     // Notify listeners (KavitaService) that download finished
     this.eventEmitter.emit(DOWNLOAD_COMPLETED, {
@@ -125,10 +131,17 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const sourceName = manga.source ?? 'dgmanga';
 
     this.events.emitDownloading(manga.manga_id);
+    this.logger.log(
+      `=== REDOWNLOAD START: ${manga.manga_name} (${manga.manga_id}), ` +
+        `${payload.chapters.length} chapter(s) ===`,
+    );
     await this.processChapters(manga, sourceName, payload.chapters, {
       updateLastEpi: false,
     });
     this.events.emitComplete({ manga_id: manga.manga_id });
+    this.logger.log(
+      `=== REDOWNLOAD DONE: ${manga.manga_name} (${manga.manga_id}) ===`,
+    );
   }
 
   // -------------------------------------------- REZIP
@@ -221,7 +234,9 @@ export class DownloadOrchestratorService implements OnModuleInit {
       `Chapter '${safeTitle}': downloading ${jobs.length} image(s)...`,
     );
 
-    const result = await this.imageDownloader.downloadChapter(chapterDir, jobs);
+    const result = await this.imageDownloader.downloadChapter(chapterDir, jobs, {
+      label: `Chapter '${safeTitle}'`,
+    });
     if (result.failed.length > 0) {
       const sample = result.failed[0];
       this.logger.warn(

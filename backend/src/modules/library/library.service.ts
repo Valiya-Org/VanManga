@@ -143,7 +143,7 @@ export class LibraryService {
 
     await this.repo.add(manga);
     this.logger.log(
-      `Added manga: ${manga.manga_name} (${manga.manga_id}) from ${manga.source}`,
+      `=== MANGA ADDED: ${manga.manga_name} (${manga.manga_id}) from ${manga.source} ===`,
     );
     return { status: 'added', manga };
   }
@@ -213,7 +213,7 @@ export class LibraryService {
     }
 
     await this.repo.remove(mangaId);
-    this.logger.log(`Deleted manga: ${manga.manga_name} (${mangaId})`);
+    this.logger.log(`=== MANGA DELETED: ${manga.manga_name} (${mangaId}) ===`);
     return true;
   }
 

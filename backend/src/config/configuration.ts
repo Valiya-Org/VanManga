@@ -25,6 +25,10 @@ export interface AppConfig {
      *  the legacy gevent.sleep(1 + rand) between images in
      *  modules/DGmanga.py. */
     imageDelayMs: number;
+    /** How often (ms) to emit a "X/Y images" heartbeat while a chapter is
+     *  still downloading; 0 disables. Only fires for chapters that outlast
+     *  one interval, so short chapters stay quiet. */
+    progressIntervalMs: number;
   };
   /** Server-side cache of search candidates, so the frontend can submit
    *  an "add" with just {source, manga_id} instead of echoing the base64
@@ -85,8 +89,12 @@ export default (): AppConfig => {
       workers: parseInt(process.env.NUMBER_OF_WORKERS ?? '2', 10),
     },
     download: {
-      imageConcurrency: parseInt(process.env.IMAGE_CONCURRENCY ?? '2', 10),
+      imageConcurrency: parseInt(process.env.IMAGE_CONCURRENCY ?? '1', 10),
       imageDelayMs: parseInt(process.env.IMAGE_DELAY_MS ?? '1000', 10),
+      progressIntervalMs: parseInt(
+        process.env.DOWNLOAD_PROGRESS_INTERVAL_MS ?? '10000',
+        10,
+      ),
     },
     searchCache: {
       ttlMs: parseInt(process.env.SEARCH_CACHE_TTL_MS ?? '1800000', 10), // 30 min
