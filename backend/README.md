@@ -21,10 +21,42 @@ EventsGateway (Socket.IO)
 SchedulerService (@Cron)
 ```
 
-Single Docker image: `node:20` base + `apk add python3` + `pip install
--r requirements.txt`. One process per scrape command via
-`child_process.execFile` — typical scrape is minute-scale, so subprocess
-startup (~200ms) is negligible.
+One process per scrape command via `child_process.spawn` — typical scrape
+is minute-scale, so subprocess startup (~200ms) is negligible.
+
+## Docker
+
+A single image holds the NestJS backend, the Python scraper
+(`scrape_cli.py` + `modules/` + `utils/`, deps from
+`requirements-scraper.txt` in a venv) and the built Vue3 SPA. Build from
+the **repo root**:
+
+```bash
+docker build -f backend/Dockerfile -t vanmanga .
+```
+
+Data paths match the legacy Flask container, so existing volumes mount
+unchanged:
+
+| Path in container | Contents | Env override |
+| --- | --- | --- |
+| `/vanmanga/eng_config/manga_library.json` | library | `LIBRARY_FILE` |
+| `/vanmanga/thumbnails` | cover images | `THUMBNAILS_DIR` |
+| `/downloaded` | downloaded chapters / zips | `DOWNLOAD_ROOT` |
+
+```bash
+docker run -d -p 5000:5000 \
+  -v /srv/vanmanga/eng_config:/vanmanga/eng_config \
+  -v /srv/vanmanga/thumbnails:/vanmanga/thumbnails \
+  -v /srv/vanmanga/downloaded:/downloaded \
+  -e MANGA_BASE_URL=https://manga.example.com \
+  -e MANGA_BASE_WEBSOCKET_URL=https://manga.example.com \
+  vanmanga
+```
+
+The container runs as the non-root `node` user (uid 1000). Volumes created
+by the old Flask container are root-owned; `chown -R 1000:1000` them once
+before switching.
 
 ## Adding a new manga source
 

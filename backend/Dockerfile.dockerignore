@@ -1,0 +1,26 @@
+# Build context is the repo root (see backend/Dockerfile). BuildKit applies
+# this file only to backend/Dockerfile.
+
+.git
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.local
+**/*.log
+**/__pycache__
+**/*.pyc
+.idea
+.vscode
+
+# Not needed in the image
+docs
+frontend_src
+frontend_static
+next
+dev_config
+backend/test
+backend/eng_config
+eng_config
+downloaded
+thumbnails
