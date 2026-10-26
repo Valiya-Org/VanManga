@@ -257,7 +257,12 @@ export class DownloadOrchestratorService implements OnModuleInit {
 
     if (updateLastEpi) {
       const current = this.library.get(manga.manga_id);
-      if (chapter.index > current.last_epi) {
+      // A never-downloaded manga starts at last_epi=1 (legacy schema), so
+      // chapter 1 also advances it until the first download completes.
+      const advances =
+        chapter.index > current.last_epi ||
+        (!current.completed && chapter.index === current.last_epi);
+      if (advances) {
         await this.library.patch(manga.manga_id, {
           last_epi: chapter.index,
           last_epi_name: safeTitle,
