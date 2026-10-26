@@ -96,6 +96,12 @@ production environment with `KAVITA_*` configured:
   ValidationPipe before the fix, so these never worked on NestJS. Check a
   real login returns `apiKey`/`jwt`/`refreshToken` and the login URL opens
   Kavita.
+- [ ] **Kavita enabled check**: now requires `KAVITA_BASE_URL`,
+  `KAVITA_EXPOSE_URL` and `KAVITA_ADMIN_APIKEY` all set (as in Flask).
+  Check `GET /api/kavita/status` returns `code: 200` with all three set.
+- [ ] **Kavita sync and scan**: check the 6-hourly / startup sync fills
+  `kavita_url` for downloaded manga, and that a finished download triggers
+  a folder scan (`/manga/<name>$<id>`) that Kavita picks up.
 
 ## Local development
 

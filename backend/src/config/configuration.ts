@@ -67,6 +67,8 @@ export interface AppConfig {
 }
 
 export default (): AppConfig => {
+  const kavitaBaseUrl = process.env.KAVITA_BASE_URL ?? '';
+  const kavitaExposeUrl = process.env.KAVITA_EXPOSE_URL ?? '';
   const kavitaApiKey = process.env.KAVITA_ADMIN_APIKEY ?? '';
   const flaresolverrUrl = process.env.FLARESOLVERR_URL ?? '';
 
@@ -105,11 +107,14 @@ export default (): AppConfig => {
       port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
     },
     kavita: {
-      baseUrl: process.env.KAVITA_BASE_URL ?? '',
-      exposeUrl: process.env.KAVITA_EXPOSE_URL ?? '',
+      baseUrl: kavitaBaseUrl,
+      exposeUrl: kavitaExposeUrl,
       adminApiKey: kavitaApiKey,
       libId: parseInt(process.env.KAVITA_LIB_ID ?? '1', 10),
-      enabled: kavitaApiKey.length > 0,
+      // Same rule as Flask: all three must be set, or calls go to a relative URL.
+      enabled: [kavitaBaseUrl, kavitaExposeUrl, kavitaApiKey].every(
+        (v) => v.length > 0,
+      ),
     },
     flaresolverr: {
       url: flaresolverrUrl,
