@@ -1,5 +1,5 @@
 # --- Build stage ---
-FROM node:20-alpine AS builder
+FROM node:24.22.1-alpine AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY src ./src
 RUN npm run build && npm prune --production
 
 # --- Runtime stage ---
-FROM node:20-alpine AS runner
+FROM node:24.22.1-alpine AS runner
 
 ENV NODE_ENV=production \
     PORT=5000

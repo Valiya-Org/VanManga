@@ -2,6 +2,9 @@
   "name": "vanmanga",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
+  },
   "description": "VanManga monorepo root — orchestrates frontend (Vue3/Vite) and backend (NestJS) builds",
   "scripts": {
     "build": "npm run build:frontend && npm run build:backend",

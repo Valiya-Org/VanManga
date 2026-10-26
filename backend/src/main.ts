@@ -8,8 +8,21 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { spaFallback } from './modules/frontend/spa-fallback';
+import { findRevokedRoots } from './common/security/trust-store-check';
 
 async function bootstrap(): Promise<void> {
+  // Outbound scraping / Kavita calls rely on Node's bundled CA store, which
+  // browser revocation (CRLSet/OneCRL) does not reach. Refuse to start on a
+  // Node build that still trusts a compromised root.
+  const revoked = findRevokedRoots();
+  if (revoked.length > 0) {
+    throw new Error(
+      `Node ${process.version} trusts revoked root(s): ${revoked.join(', ')}. ` +
+        'Upgrade to Node 22.23.4 / 24.22.1 / 26.12.1 or later.',
+    );
+  }
+
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
     // Disable the built-in 100kb body parser so we can register our own with
