@@ -11,3 +11,6 @@ downloaded
 # frontend (Vite)
 /frontend/node_modules
 /frontend/dist
+
+# local runtime data from the separate vanmanga-next project; never commit
+/next/
