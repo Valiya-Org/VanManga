@@ -15,7 +15,8 @@ ScraperService                   scrape_cli.py
        └─ DGmangaSource ──exec──> └─ modules/MangaSite.py
        └─ <future sources>        └─ utils/* (CF, paths, etc.)
 
-DownloadService (Bull)
+DownloadService (in-memory FIFO queue)
+SearchCacheService (search candidates for lean add)
 LibraryService
 EventsGateway (Socket.IO)
 SchedulerService (@Cron)
@@ -54,6 +55,11 @@ docker run -d -p 5000:5000 \
   vanmanga
 ```
 
+Set `MANGA_BASE_URL` / `MANGA_BASE_WEBSOCKET_URL` to the public address.
+`MANGA_BASE_WEBSOCKET_URL` is also written into each newly added manga's
+`thumbnail` URL in the library (as Flask did); left unset, covers point at
+`http://localhost:5000`. All variables are listed in `.env.example`.
+
 The container runs as the non-root `node` user (uid 1000). Volumes created
 by the old Flask container are root-owned; `chown -R 1000:1000` them once
 before switching.
@@ -83,7 +89,7 @@ events are source-agnostic; new sources plug in without touching them.
 | 4     | DownloadModule (in-memory FIFO queue, image downloader, orchestrator) | Done |
 | 5     | SchedulerModule + KavitaModule                        | Done     |
 | 6     | Static frontend wiring + endpoint parity              | Done     |
-| 7     | Swagger API docs, unit tests (22 passing)             | Done     |
+| 7     | Swagger API docs, unit tests                          | Done     |
 
 ### Pending verification
 
@@ -106,14 +112,15 @@ production environment with `KAVITA_*` configured:
 ## Local development
 
 ```bash
-# Install Python deps (re-uses existing requirements.txt at repo root)
-cd .. && pip install -r requirements.txt
+# Python scraper deps (from the repo root), in a venv
+python -m venv .venv && .venv/bin/pip install -r requirements-scraper.txt
 
-# Install NestJS deps
-cd nestjs && cp .env.example .env && npm install
+# NestJS deps; point PYTHON_EXECUTABLE in .env at the venv's python
+cd backend && cp .env.example .env && npm install
 
-# Run
+# Run / test
 npm run start:dev
+npm test
 ```
 
 Listens on `PORT` (default 5000), exposes everything under `/api`.
@@ -121,7 +128,10 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
 ## Module map (current)
 
 - `src/config` — environment-driven configuration (typed `AppConfig`).
-- `src/common` — global filter + logging interceptor.
+- `src/common` — global filter, logging interceptor, shared
+  ValidationPipe (`whitelist: true`: every DTO field needs a
+  class-validator decorator) and the startup check that refuses a Node
+  build still trusting a revoked root CA.
 - `src/modules/filesystem` — directory tree, image writes, zip archive,
   thumbnail persistence. Replaces `utils/make_path.py`,
   `utils/generate_file_path.py`, `utils/re_zip_downloaded.py`,
@@ -146,8 +156,14 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
   Replaces `utils/TaskQueue.py`, `confirm_comic_task` /
   `download_chapter_task` / `re_zip_task` in main.py, and
   `modules/DGmanga.py:download_img`. Routes under `/api/download/*`
-  (new) and `/api/dogemanga/{confirmdownload,redownload,cdl,dlqueue,
-  rezip,confirmmanga}` (legacy).
+  (new) and `/api/dogemanga/{redownload,cdl,dlqueue,rezip,confirmmanga}`
+  (legacy). There is no `confirmdownload`: adding a manga already queues
+  its download.
+- `src/modules/search-cache` — in-memory TTL/FIFO cache of search
+  candidates keyed by `source:manga_id`, so `POST /api/library` can take
+  just `{ manga_id, source, submit_sign }`; a miss answers `410
+  search-expired`. Search with `?thumb=url` returns cover URLs
+  (`/api/scraper/:source/search-thumbnail/:id`) instead of base64.
 - `src/modules/kavita` — Kavita server integration. Authenticate via
   Plugin API, sync kavita_url into library (every 6h), trigger folder
   scan after download completes, proxy login/refresh-token for the

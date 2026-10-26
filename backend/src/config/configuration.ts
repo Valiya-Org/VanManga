@@ -39,10 +39,6 @@ export interface AppConfig {
     /** Hard cap on cached candidates (FIFO eviction beyond this). */
     maxEntries: number;
   };
-  redis: {
-    host: string;
-    port: number;
-  };
   kavita: {
     baseUrl: string;
     exposeUrl: string;
@@ -101,10 +97,6 @@ export default (): AppConfig => {
     searchCache: {
       ttlMs: parseInt(process.env.SEARCH_CACHE_TTL_MS ?? '1800000', 10), // 30 min
       maxEntries: parseInt(process.env.SEARCH_CACHE_MAX_ENTRIES ?? '500', 10),
-    },
-    redis: {
-      host: process.env.REDIS_HOST ?? '127.0.0.1',
-      port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
     },
     kavita: {
       baseUrl: kavitaBaseUrl,
