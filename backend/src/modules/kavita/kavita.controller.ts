@@ -5,18 +5,21 @@ import {
   HttpCode,
   Post,
 } from '@nestjs/common';
+import { IsString } from 'class-validator';
 import { KavitaService } from './kavita.service';
 
 // ---------------------------------------------------------------- DTOs
+// Every field needs a class-validator decorator: the global ValidationPipe
+// runs with `whitelist: true` and strips undecorated properties.
 
 class KavitaLoginDto {
-  username!: string;
-  password!: string;
+  @IsString() username!: string;
+  @IsString() password!: string;
 }
 
 class KavitaRefreshDto {
-  jwt!: string;
-  refreshToken!: string;
+  @IsString() jwt!: string;
+  @IsString() refreshToken!: string;
 }
 
 // ---------------------------------------------------------------- Controller

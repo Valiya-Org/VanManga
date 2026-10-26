@@ -85,6 +85,18 @@ events are source-agnostic; new sources plug in without touching them.
 | 6     | Static frontend wiring + endpoint parity              | Done     |
 | 7     | Swagger API docs, unit tests (22 passing)             | Done     |
 
+### Pending verification
+
+Covered by unit tests only; not yet checked against a real service.
+Kavita is optional and has no local setup, so verify these in a test or
+production environment with `KAVITA_*` configured:
+
+- [ ] **Kavita login / refresh-token** (`POST /api/kavita/login`,
+  `/api/kavita/refreshtoken`): fields were stripped by the whitelist
+  ValidationPipe before the fix, so these never worked on NestJS. Check a
+  real login returns `apiKey`/`jwt`/`refreshToken` and the login URL opens
+  Kavita.
+
 ## Local development
 
 ```bash
