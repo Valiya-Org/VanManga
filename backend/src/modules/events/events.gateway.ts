@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -7,13 +8,21 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import { QUEUE_CHANGED } from '../../common/events/app.events';
+import type { QueueSnapshot } from '../download/queue/task.types';
 import {
+  ChapterCompletedPayload,
   CompleteInfoPayload,
   DmcaAlertPayload,
+  DownloadCompletedPayload,
+  DownloadProgressPayload,
+  DownloadStartedPayload,
   ResponsePayload,
   SOCKET_EVENTS,
 } from './events.types';
 
+/** Server → client broadcasts (docs/api-contract.md §4). Clients never
+ *  send events. */
 @WebSocketGateway({
   cors: { origin: true, credentials: true },
   transports: ['websocket', 'polling'],
@@ -38,30 +47,57 @@ export class EventsGateway
     this.logger.debug(`client disconnected: ${client.id}`);
   }
 
-  /** Emits 'downloading_info' with a BARE manga_id string — replaces
-   *  socketio.emit('downloading_info', manga_id). */
-  emitDownloading(mangaId: string): void {
-    this.server.emit(SOCKET_EVENTS.DOWNLOADING, mangaId);
+  // ------------------------------------------------------------ canonical
+
+  emitDownloadStarted(payload: DownloadStartedPayload): void {
+    this.emit(SOCKET_EVENTS.DOWNLOAD_STARTED, payload);
   }
 
-  /** Emits 'response' — the newest downloaded episode advanced.
-   *  Replaces socketio.emit('response', { manga_id, ... }). */
-  emitResponse(payload: ResponsePayload): void {
-    this.server.emit(SOCKET_EVENTS.RESPONSE, payload);
+  emitDownloadProgress(payload: DownloadProgressPayload): void {
+    this.emit(SOCKET_EVENTS.DOWNLOAD_PROGRESS, payload);
   }
 
-  /** Emits 'complete_info' — replaces socketio.emit('complete_info', ...) */
-  emitComplete(payload: CompleteInfoPayload): void {
-    this.server.emit(SOCKET_EVENTS.COMPLETE, payload);
+  emitChapterCompleted(payload: ChapterCompletedPayload): void {
+    this.emit(SOCKET_EVENTS.CHAPTER_COMPLETED, payload);
   }
 
-  /** Emits 'scan_completed' — replaces socketio.emit('scan_completed') */
+  emitDownloadCompleted(payload: DownloadCompletedPayload): void {
+    this.emit(SOCKET_EVENTS.DOWNLOAD_COMPLETED, payload);
+  }
+
+  @OnEvent(QUEUE_CHANGED)
+  handleQueueChanged(snapshot: QueueSnapshot): void {
+    this.emit(SOCKET_EVENTS.QUEUE_UPDATED, snapshot);
+  }
+
+  /** 'scan_completed' — a rezip task finished. No payload. */
   emitScanCompleted(): void {
-    this.server.emit(SOCKET_EVENTS.SCAN_COMPLETED);
+    this.emit(SOCKET_EVENTS.SCAN_COMPLETED);
   }
 
-  /** Emits 'dmca_alert' — used when scraper returns errorCode 504. */
   emitDmcaAlert(payload: DmcaAlertPayload): void {
-    this.server.emit(SOCKET_EVENTS.DMCA_ALERT, payload);
+    this.emit(SOCKET_EVENTS.DMCA_ALERT, payload);
+  }
+
+  // --------------------------------------------------------------- legacy
+
+  /** 'downloading_info' with a BARE manga_id string. */
+  emitDownloading(mangaId: string): void {
+    this.emit(SOCKET_EVENTS.DOWNLOADING, mangaId);
+  }
+
+  /** 'response' — the newest downloaded episode advanced. */
+  emitResponse(payload: ResponsePayload): void {
+    this.emit(SOCKET_EVENTS.RESPONSE, payload);
+  }
+
+  /** 'complete_info' — a download run ended. */
+  emitComplete(payload: CompleteInfoPayload): void {
+    this.emit(SOCKET_EVENTS.COMPLETE, payload);
+  }
+
+  /** The queue can change during module init, before the server exists. */
+  private emit(event: string, ...args: unknown[]): void {
+    this.server?.emit(event, ...args);
   }
 }
