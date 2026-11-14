@@ -26,5 +26,28 @@ process.stdin.on('end', () => {
     case 'hang':
       setTimeout(() => {}, 60_000);
       break;
+
+    // --- dgmanga-shaped commands for the e2e suite (test/*.e2e-spec.ts)
+    case 'search':
+      if (args[0] === 'nothing') {
+        // scrape_cli.py reports "no results" as source status 457
+        emit({ ok: false, errorCode: 457, error: 'Source returned status 457' });
+        break;
+      }
+      emit({
+        ok: true,
+        data: [
+          { manga_id: '-e2e1', manga_name: 'E2E Manga', artist_name: 'Tester', newest_epi: '第1话', thumbnail: Buffer.from('jpeg-1').toString('base64') },
+          { manga_id: '-e2e2', manga_name: 'E2E Manga!', artist_name: 'Tester', newest_epi: '第2话', thumbnail: Buffer.from('jpeg-2').toString('base64') },
+        ],
+      });
+      break;
+    case 'metadata':
+      emit({ ok: true, data: { chapterCount: 1, serialization: 1 } });
+      break;
+    case 'chapters':
+      // No chapters: a full download completes without fetching images.
+      emit({ ok: true, data: { chapters: [] } });
+      break;
   }
 });

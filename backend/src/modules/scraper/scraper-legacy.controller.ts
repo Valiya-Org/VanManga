@@ -1,11 +1,13 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { ScraperService } from './scraper.service';
 
 /** Legacy search route used by the Vue frontend.
  *  GET /api/dogemanga/search?manga_name=xxx
  *
  *  The new route is /api/scraper/:source/search?q=xxx but the
- *  frontend hardcodes /api/dogemanga/search, so we keep this. */
+ *  frontend hardcodes /api/dogemanga/search, so we keep this until P4. */
+@ApiExcludeController()
 @Controller()
 export class ScraperLegacyController {
   constructor(private readonly scraper: ScraperService) {}
