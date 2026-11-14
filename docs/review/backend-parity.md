@@ -1,0 +1,56 @@
+# 后端迁移审核（P1）— 进行中
+
+- 基准：Flask 原版 `main.py`、`modules/DGmanga.py`、`utils/*.py`
+- 对象：`backend/src`（NestJS）
+- 规格：`docs/superpowers/specs/2026-11-14-migration-completion-roadmap-design.md` 第 5 节
+- 状态：**断点，未完成**。六个面的代码对照已全部读完；修复做了一部分。
+
+## 断点（下次从这里继续）
+
+已完成并提交（`7958ecd`，未推送）：F1、F4、F6、F8、F11 及其测试。后端单测 134 通过，唯一失败是本机 Node 偏旧导致的 `trust-store-check`（CI 上通过）。
+
+下一步按顺序做：
+
+1. 修 **F3**（漫画名含 `/`）：在 `FilesystemService` 加一个目录名函数（`/` → `-`），`ensureMangaTree`、`LibraryService.deleteManga`、`KavitaService.scanFolder` 三处共用，带测试
+2. 修 **F12**（库文件损坏时清空数据）：`LibraryRepository.load` 解析失败时抛错拒绝启动，带测试
+3. 修 **F24**（CF 探测没带浏览器 UA）：`SchedulerService.cfProbe` 加 User-Agent，带测试
+4. 把下表补全定稿，写手动验证清单
+5. 全量测试 + lint，推送分支，确认 CI 全绿
+6. P1 完成后**停下**（用户要求），不进入 P2
+
+## 发现
+
+严重度：阻断 / 重要 / 轻微。类型：bug / 遗漏 / 有意改动。
+
+| # | 严重度 | 类型 | 问题 | 处理 |
+|---|---|---|---|---|
+| F1 | 阻断 | 遗漏 | 章节名没经过 `chapter_title_reformat`。Flask 用改写后的名字做章节目录、压缩包名和 `last_epi_name`，Kavita 靠它识别卷/话；NestJS 直接用原始标题，新下载与已有文件命名不一致，重下会产生重复章节 | **已修**：`download/chapter-title.ts`，35 个样本与 Python 输出逐字节一致 |
+| F3 | 重要 | bug | 漫画名含 `/`（如 "Fate / Strange Fake"）时，Flask 全量下载把 `/` 换成 `-`；NestJS 不换，会建出嵌套目录，删除和 Kavita 扫描路径也对不上 | 待修 |
+| F4 | 重要 | 遗漏 | 图片失败再多也照样打包并推进 `last_epi`。Flask 单章失败 ≥10 张即放弃该章 | **已修**：≥10 张失败则不打包、不记录，并删掉残缺目录 |
+| F6 | 重要 | 遗漏 | 重下章节后不触发 Kavita 扫描（Flask 会） | **已修** |
+| F8 | 重要 | 遗漏 | 章节页返回 429 时直接丢弃该章。Flask 会等待后重试。由于 `last_epi` 只记最大序号，被丢的章节永远不会补下 | **已修**：最多重试 5 次，等待 40s × 次数 + 抖动 |
+| F11 | 重要 | bug | 所有章节都失败时仍标记 `completed`，并把连载状态写入更新开关；已完结的漫画会因此永远不再扫描，一话都没下到 | **已修**：全部失败时不改记录，下次扫描重试 |
+| F12 | 阻断 | bug | `manga_library.json` 解析失败时"以空库启动"，下一次写入就会用空库覆盖原文件。Flask 此时会直接崩溃 | 待修 |
+| F24 | 重要 | bug | Cloudflare 探测用 axios 默认 UA，CF 对非浏览器 UA 常返回 403，会被误判为有验证而反复调用 FlareSolverr。Flask 用的是带浏览器 UA 的 DrissionPage | 待修 |
+| F2 | 轻微 | 有意改动 | 图片文件名由 `第 N 页.jpg` 改为 `001.jpg`。补零后排序更稳，只影响压缩包内部 | 接受 |
+| F7 | 重要 | 遗漏 | 开始下载时不再把 `add_date` 改为当前时间，旧前端"按最近更新排序"失效 | 归入 P2（新字段 `updated_at`） |
+| F9 | 轻微 | 沿袭 | 失败的章节不会补下（`last_epi` 只记最大序号）。Flask 同样如此 | 归入 P2 评估 |
+| F10 | 轻微 | 遗漏 | 章节之间不再间隔 2–5 秒启动，限流风险略高 | 归入 P2 评估 |
+| F13 | 轻微 | 有意改动 | 新增漫画的封面地址改为 `/api/library/:id/thumbnail`，旧记录仍是 `/api/dogemanga/thumbnail?mid=` | 归入 P2（读取时归一），否则 P4 删旧路由会让旧封面失效 |
+| F14 | 轻微 | 有意改动 | 查重算法由 difflib 改为字符二元组 Dice 系数，结果近似但不完全相同 | 接受 |
+| F15 | 轻微 | 有意改动 | 下载目录不存在时也能删除漫画（Flask 返回 424 并保留记录） | 接受，更合理 |
+| F16 | 轻微 | 有意改动 | 添加已存在的漫画返回 200 `already-in-library`（Flask 410）；疑似重复返回 409（Flask 411）；无 `confirmdownload` | 接受，P2 统一 |
+| F21 | 轻微 | 沿袭 | 启动时同步等待 Kavita 且无超时，Kavita 网络不通时启动会挂起 | 归入 P2 |
+| F30 | 轻微 | 新增 | DMCA（504）分支会自动删除漫画及文件，但目前没有任何抓取代码返回 504，是死代码 | 归入 P2 决定去留 |
+| F31 | 轻微 | bug | `GET /api/library/:mangaId/chapters` 读 query 而非路径参数；`/api/scraper/:source/search` 无结果时抛 500 | 归入 P2 |
+
+对照后确认一致、无需处理：路由入参与返回（除上表）、每日 01:30 扫描、启动扫描的顺序与条件、Kavita 每 6 小时同步、CF 监控 12 分钟间隔、队列单并发、删除时的"下载中/排队中"保护、压缩包结构、库文件字段与默认值、Kavita 登录与刷新令牌。
+
+## 待回答的两个问题（P2/P4 依赖）
+
+- 任务重跑是否重复下载：**会**。全量任务从 `last_epi + 1` 开始，已完成的章节不会重下；但被中断任务里"已下载但序号小于最大值"的章节无记录。P2 队列持久化需要考虑。
+- `library/short`、`library/paginate`、`library/search` 的调用方：新旧前端代码里都没有调用，仓库内无其他使用者。是否有仓库外的调用方需用户确认。
+
+## 手动验证清单（待写）
+
+本地无法验证、需在测试环境执行的项目，定稿时补全。已知至少包括：真实抓取一部漫画并核对目录与压缩包命名、Kavita 登录、Kavita 同步、下载后 Kavita 扫描、FlareSolverr 开启时的 CF 探测。
