@@ -80,7 +80,7 @@ type ApiErrorCode =
   | 'kavita-unreachable'; // 连不上 Kavita 或 Kavita 返回异常
 ```
 
-客户端遇到表中没有的 `error` 字符串时，应按 HTTP 状态做通用处理（形如 `http-<status>` 的值可能出现在少见状态上）。
+客户端遇到表中没有的 `error` 字符串时，应按 HTTP 状态做通用处理。没有专门错误码的异常由过滤器按状态给缺省值：`bad-request`(400)、`unauthorized`(401)、`forbidden`(403)、`not-found`(404)、`conflict`(409)、`payload-too-large`(413)、`rate-limited`(429)、`internal-error`(500)，其余为 `http-<status>`。`internal-error` 不带 `message`（细节只写日志）。
 
 ### 1.4 管理员口令
 
