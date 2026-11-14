@@ -5,6 +5,8 @@ import { http, setAdminTokenProvider } from '@/api/http';
 import { deleteManga } from '@/api/endpoints';
 import { ApiError } from '@/api/errors';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
+import { nextTick } from 'vue';
+import { useConfigStore } from './config';
 import { KAVITA_STORAGE_KEY, useSessionStore } from './session';
 
 let server: FakeServer;
@@ -39,7 +41,7 @@ describe('session store · Kavita', () => {
     expect(s.kavitaLoginUrl).toBeNull();
   });
 
-  it('logs in, exposes loginUrl and persists the session', async () => {
+  it('logs in, exposes loginUrl and persists only the login link', async () => {
     server.reply(200, { code: 200, data: LOGIN });
     const s = useSessionStore();
 
@@ -47,17 +49,80 @@ describe('session store · Kavita', () => {
 
     expect(s.kavitaLoggedIn).toBe(true);
     expect(s.kavitaLoginUrl).toBe(LOGIN.loginUrl);
-    expect(JSON.parse(localStorage.getItem(KAVITA_STORAGE_KEY)!)).toEqual(LOGIN);
+    const stored = localStorage.getItem(KAVITA_STORAGE_KEY)!;
+    expect(JSON.parse(stored)).toEqual({ loginUrl: LOGIN.loginUrl });
+    expect(stored).not.toContain('jwt1');
+    expect(stored).not.toContain('rt1');
   });
 
-  it('restores a persisted Kavita session on creation', () => {
-    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify(LOGIN));
+  it('restores a persisted login link on creation', () => {
+    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify({ loginUrl: LOGIN.loginUrl }));
     expect(useSessionStore().kavitaLoginUrl).toBe(LOGIN.loginUrl);
   });
 
-  it('ignores a corrupt persisted session', () => {
-    localStorage.setItem(KAVITA_STORAGE_KEY, '{nope');
-    expect(useSessionStore().kavitaLoggedIn).toBe(false);
+  it('migrates an old-format entry: keeps the link, drops jwt and refresh token', () => {
+    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify(LOGIN));
+    const s = useSessionStore();
+    expect(s.kavitaLoginUrl).toBe(LOGIN.loginUrl);
+    expect(JSON.parse(localStorage.getItem(KAVITA_STORAGE_KEY)!)).toEqual({
+      loginUrl: LOGIN.loginUrl,
+    });
+  });
+
+  it.each([['{nope'], ['{"jwt":"x"}'], ['null'], ['{"loginUrl":""}']])(
+    'removes an unusable stored entry %s',
+    (raw) => {
+      localStorage.setItem(KAVITA_STORAGE_KEY, raw);
+      expect(useSessionStore().kavitaLoggedIn).toBe(false);
+      expect(localStorage.getItem(KAVITA_STORAGE_KEY)).toBeNull();
+    },
+  );
+
+  it.each(['kavita-disabled', 'kavita-refresh-failed'])(
+    'a %s response clears the stored link',
+    async (error) => {
+      localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify({ loginUrl: LOGIN.loginUrl }));
+      server.reply(error === 'kavita-disabled' ? 404 : 403, { code: 403, error });
+      const s = useSessionStore();
+      await expect(s.kavitaLogin('u', 'p')).rejects.toMatchObject({ error });
+      expect(s.kavitaLoggedIn).toBe(false);
+      expect(localStorage.getItem(KAVITA_STORAGE_KEY)).toBeNull();
+    },
+  );
+
+  it('a failed login for another reason keeps the stored link', async () => {
+    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify({ loginUrl: LOGIN.loginUrl }));
+    server.reply(502, { code: 502, error: 'kavita-unreachable' });
+    const s = useSessionStore();
+    await expect(s.kavitaLogin('u', 'p')).rejects.toBeInstanceOf(ApiError);
+    expect(s.kavitaLoggedIn).toBe(true);
+  });
+
+  it('clears the stored link once the config says Kavita is disabled', async () => {
+    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify({ loginUrl: LOGIN.loginUrl }));
+    const s = useSessionStore();
+    server.reply(200, {
+      code: 200,
+      data: { kavitaEnabled: false, kavitaExposeUrl: null, adminRequired: false },
+    });
+    await useConfigStore().load();
+    await nextTick();
+    expect(s.kavitaLoggedIn).toBe(false);
+    expect(localStorage.getItem(KAVITA_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps the stored link when the config enables Kavita or fails to load', async () => {
+    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify({ loginUrl: LOGIN.loginUrl }));
+    const s = useSessionStore();
+    server.networkError();
+    await useConfigStore().load();
+    server.reply(200, {
+      code: 200,
+      data: { kavitaEnabled: true, kavitaExposeUrl: 'http://k', adminRequired: false },
+    });
+    await useConfigStore().load();
+    await nextTick();
+    expect(s.kavitaLoggedIn).toBe(true);
   });
 
   it('stays logged out and rethrows when Kavita rejects the login', async () => {
@@ -68,43 +133,6 @@ describe('session store · Kavita', () => {
     });
     expect(s.kavitaLoggedIn).toBe(false);
     expect(localStorage.getItem(KAVITA_STORAGE_KEY)).toBeNull();
-  });
-
-  it('refreshes the tokens and keeps apiKey/loginUrl', async () => {
-    server.replyOnce(200, { code: 200, data: LOGIN });
-    server.replyOnce(200, { code: 200, data: { jwt: 'jwt2', refreshToken: 'rt2' } });
-    const s = useSessionStore();
-    await s.kavitaLogin('u', 'p');
-
-    await s.refreshKavitaToken();
-
-    expect(server.lastBody()).toEqual({ jwt: 'jwt1', refreshToken: 'rt1' });
-    expect(s.kavita).toEqual({ ...LOGIN, jwt: 'jwt2', refreshToken: 'rt2' });
-    expect(JSON.parse(localStorage.getItem(KAVITA_STORAGE_KEY)!).jwt).toBe('jwt2');
-  });
-
-  it('logs out when the refresh token is rejected', async () => {
-    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify(LOGIN));
-    server.reply(403, { code: 403, error: 'kavita-refresh-failed' });
-    const s = useSessionStore();
-
-    await expect(s.refreshKavitaToken()).rejects.toBeInstanceOf(ApiError);
-
-    expect(s.kavitaLoggedIn).toBe(false);
-    expect(localStorage.getItem(KAVITA_STORAGE_KEY)).toBeNull();
-  });
-
-  it('keeps the session when the refresh fails for another reason', async () => {
-    localStorage.setItem(KAVITA_STORAGE_KEY, JSON.stringify(LOGIN));
-    server.reply(502, { code: 502, error: 'kavita-unreachable' });
-    const s = useSessionStore();
-    await expect(s.refreshKavitaToken()).rejects.toBeInstanceOf(ApiError);
-    expect(s.kavitaLoggedIn).toBe(true);
-  });
-
-  it('refresh without a session is a no-op', async () => {
-    await useSessionStore().refreshKavitaToken();
-    expect(server.requests).toHaveLength(0);
   });
 
   it('logout clears state and storage', () => {

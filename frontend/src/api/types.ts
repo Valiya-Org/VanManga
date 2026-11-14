@@ -203,11 +203,6 @@ export interface KavitaLoginResult {
   loginUrl: string;
 }
 
-export interface KavitaTokens {
-  jwt: string;
-  refreshToken: string;
-}
-
 // ------------------------------------------------------------- §4 socket
 
 export interface DownloadStartedEvent {

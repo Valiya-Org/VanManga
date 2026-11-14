@@ -112,19 +112,15 @@ describe('endpoints', () => {
     expect(sent()).toMatchObject({ method: 'GET', url: 'download/current' });
   });
 
-  it('kavitaLogin / kavitaRefreshToken', async () => {
+  it('kavitaLogin: POST kavita/login', async () => {
     ok({ apiKey: 'k', jwt: 'j', refreshToken: 'r', loginUrl: 'http://k/login?apiKey=k' });
     await api.kavitaLogin('u', 'p');
     expect(sent()).toMatchObject({ method: 'POST', url: 'kavita/login' });
     expect(server.lastBody()).toEqual({ username: 'u', password: 'p' });
+  });
 
-    ok({ jwt: 'j2', refreshToken: 'r2' });
-    await expect(api.kavitaRefreshToken({ jwt: 'j', refreshToken: 'r' })).resolves.toEqual({
-      jwt: 'j2',
-      refreshToken: 'r2',
-    });
-    expect(sent()).toMatchObject({ method: 'POST', url: 'kavita/refreshtoken' });
-    expect(server.lastBody()).toEqual({ jwt: 'j', refreshToken: 'r' });
+  it('does not wrap the Kavita refresh endpoint (nothing uses the JWT)', () => {
+    expect('kavitaRefreshToken' in api).toBe(false);
   });
 
   it('thumbnail URL builders are same-origin and encoded', () => {

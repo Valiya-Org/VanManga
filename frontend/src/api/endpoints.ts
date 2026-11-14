@@ -5,7 +5,9 @@
  *
  * Not wrapped on purpose (the contract says the new frontend does not need
  * them): the scraper debug routes (§3.2) and `library/short|search|paginate`
- * (§3.3, may be removed in P4).
+ * (§3.3, may be removed in P4), and `POST /api/kavita/refreshtoken` (§3.5):
+ * the frontend only uses Kavita's `loginUrl`, never the JWT, so there is
+ * nothing to refresh.
  */
 import { request } from './http';
 import type {
@@ -13,7 +15,6 @@ import type {
   AddMangaResult,
   Chapter,
   KavitaLoginResult,
-  KavitaTokens,
   Manga,
   QueueSnapshot,
   RuntimeConfig,
@@ -128,13 +129,4 @@ export function getCurrentTask(): Promise<TaskSummary | null> {
 /** `POST /api/kavita/login` */
 export function kavitaLogin(username: string, password: string): Promise<KavitaLoginResult> {
   return request({ method: 'POST', url: 'kavita/login', data: { username, password } });
-}
-
-/** `POST /api/kavita/refreshtoken` */
-export function kavitaRefreshToken(tokens: KavitaTokens): Promise<KavitaTokens> {
-  return request({
-    method: 'POST',
-    url: 'kavita/refreshtoken',
-    data: { jwt: tokens.jwt, refreshToken: tokens.refreshToken },
-  });
 }
