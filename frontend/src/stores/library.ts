@@ -32,9 +32,10 @@ export interface AddOptions {
   confirmDuplicate: (duplicates: string[]) => Promise<boolean>;
 }
 
-type LocalChange =
-  | { v: number; kind: 'replace'; id: string }
-  | { v: number; kind: 'patch'; id: string; fields: Partial<Manga> };
+type ChangeBody =
+  | { kind: 'replace'; id: string }
+  | { kind: 'patch'; id: string; fields: Partial<Manga> };
+type LocalChange = ChangeBody & { v: number };
 
 function newestFirst(a: Manga, b: Manga): number {
   return b.updated_at - a.updated_at || b.add_date - a.add_date;
@@ -75,8 +76,8 @@ export const useLibraryStore = defineStore('library', () => {
   let inFlight = 0;
   const changes: LocalChange[] = [];
 
-  function record(change: Omit<LocalChange, 'v'>): void {
-    if (inFlight > 0) changes.push({ ...change, v: ++version } as LocalChange);
+  function record(change: ChangeBody): void {
+    if (inFlight > 0) changes.push({ ...change, v: ++version });
   }
 
   function upsert(manga: Manga): void {
