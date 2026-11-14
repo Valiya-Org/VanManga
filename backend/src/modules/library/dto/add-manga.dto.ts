@@ -1,10 +1,4 @@
-import {
-  IsBase64,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 /** Accepted by POST /api/library.
  *
