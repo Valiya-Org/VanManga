@@ -29,7 +29,7 @@ describe('Frontend static serving (e2e)', () => {
   it('GET / returns the SPA index.html', async () => {
     const res = await request(app.getHttpServer()).get('/');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('<div id="app">');
+    expect(res.text).toMatch(/<div id="app"[^>]*>/);
   });
 
   it('GET /js/config.js returns runtime config (not shadowed by SPA fallback)', async () => {
