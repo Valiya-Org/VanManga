@@ -1,7 +1,7 @@
 # Python deps for scrape_cli.py only (invoked by the NestJS backend).
-# The full requirements.txt is the legacy Flask app's and is not used by the
-# backend image. Pins follow requirements.txt, except certifi, which must be
-# >= 2026.10.18 (drops the compromised emSign ECC Root CA - G3).
+# Pins follow the legacy Flask app's requirements.txt (removed in P4), except
+# certifi, which must be >= 2026.10.18 (drops the compromised emSign ECC
+# Root CA - G3).
 
 # scraper (modules/DGmanga.py, scrape_cli.py)
 DrissionPage==4.0.4.7
