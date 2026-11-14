@@ -17,6 +17,7 @@ type ResolvedCandidate = AddMangaDto & {
 @Injectable()
 export class MangaFactoryService {
   build(candidate: ResolvedCandidate): Manga {
+    const now = Date.now() / 1000; // unix seconds, mirrors utc_time.timestamp()
     return {
       manga_id: candidate.manga_id,
       manga_name: candidate.manga_name,
@@ -32,7 +33,8 @@ export class MangaFactoryService {
       completed: false,
       serialization: 0,
       download_switch: 0,
-      add_date: Date.now() / 1000, // unix seconds, mirrors utc_time.timestamp()
+      add_date: now,
+      updated_at: now,
       kavita_url: 'None', // 2.1-dev sentinel, frontend handles "None" specially
     };
   }
