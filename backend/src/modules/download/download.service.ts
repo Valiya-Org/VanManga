@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { MangaNotFoundException } from '../../common/http/api-exception';
 import { OnEvent } from '@nestjs/event-emitter';
 import {
   MANGA_ADDED,
@@ -10,6 +11,7 @@ import {
   ChapterPickDto,
 } from './dto/submit-download.dto';
 import {
+  QueueSnapshot,
   TaskHandle,
   TaskKind,
   TaskSummaryDto,
@@ -35,14 +37,14 @@ export class DownloadService {
 
   submitFullManga(mangaId: string): TaskHandle {
     if (!this.library.has(mangaId)) {
-      throw new NotFoundException(`Unknown manga: ${mangaId}`);
+      throw new MangaNotFoundException(mangaId);
     }
     return this.queue.enqueue({ kind: TaskKind.FULL_MANGA, mangaId });
   }
 
   submitRedownload(mangaId: string, chapters: ChapterPickDto[]): TaskHandle {
     if (!this.library.has(mangaId)) {
-      throw new NotFoundException(`Unknown manga: ${mangaId}`);
+      throw new MangaNotFoundException(mangaId);
     }
     return this.queue.enqueue({
       kind: TaskKind.REDOWNLOAD,
@@ -61,6 +63,10 @@ export class DownloadService {
 
   pending(): TaskSummaryDto[] {
     return this.queue.pendingSummaries();
+  }
+
+  snapshot(): QueueSnapshot {
+    return this.queue.snapshot();
   }
 
   isMangaBusy(mangaId: string): boolean {

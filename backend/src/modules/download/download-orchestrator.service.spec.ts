@@ -28,6 +28,8 @@ interface SetupOptions {
   chapterImages?: Array<{ imageUrls?: string[]; errorCode?: number }>;
   /** Result of imageDownloader.downloadChapter. */
   download?: { succeeded: unknown[]; failed: unknown[] };
+  /** Overrides scraper.getChapters. */
+  getChapters?: () => Promise<unknown>;
 }
 
 function setup(
@@ -36,12 +38,20 @@ function setup(
   options: SetupOptions = {},
 ) {
   let record = { ...manga };
+  let deleted = false;
   let executor!: (p: TaskPayload) => Promise<void>;
 
   const library = {
-    get: jest.fn(() => ({ ...record })),
+    get: jest.fn(() => {
+      if (deleted) throw new Error(`Unknown manga: ${record.manga_id}`);
+      return { ...record };
+    }),
     patch: jest.fn(async (_id: string, patch: Partial<Manga>) => {
       record = { ...record, ...patch };
+    }),
+    deleteManga: jest.fn(async () => {
+      deleted = true;
+      return true;
     }),
   };
   const events = {
@@ -49,6 +59,10 @@ function setup(
     emitResponse: jest.fn(),
     emitComplete: jest.fn(),
     emitDmcaAlert: jest.fn(),
+    emitDownloadStarted: jest.fn(),
+    emitDownloadProgress: jest.fn(),
+    emitChapterCompleted: jest.fn(),
+    emitDownloadCompleted: jest.fn(),
   };
   const chapters = chapterTitles.map((title, i) => ({
     index: i + 1,
@@ -84,7 +98,7 @@ function setup(
         chapterCount: chapters.length,
         serialization: 0,
       })),
-      getChapters: jest.fn(async () => ({ chapters })),
+      getChapters: jest.fn(options.getChapters ?? (async () => ({ chapters }))),
       getChapterImages,
     } as never,
     { downloadChapter } as never,
@@ -119,9 +133,148 @@ function setup(
     archive,
     getChapterImages,
     sleep,
+    library,
     record: () => record,
   };
 }
+
+const NOW_MS = 1_800_000_000_000;
+const NOW_S = 1_800_000_000;
+
+describe('DownloadOrchestratorService — canonical socket events and updated_at', () => {
+  beforeEach(() => jest.spyOn(Date, 'now').mockReturnValue(NOW_MS));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('emits started → progress → chapter_completed … → completed for a full download', async () => {
+    const t = setup(newManga({ add_date: 1000 }), ['第1话', '第2话']);
+    await t.runFull();
+
+    expect(t.events.emitDownloadStarted).toHaveBeenCalledWith({ manga_id: 'E8uHNgs8', kind: 'full-manga' });
+    expect(t.events.emitDownloadProgress.mock.calls.map((c) => c[0])).toEqual([
+      { manga_id: 'E8uHNgs8', chapters_total: 2, chapters_done: 0, chapters_failed: 0 },
+      { manga_id: 'E8uHNgs8', chapters_total: 2, chapters_done: 1, chapters_failed: 0 },
+      { manga_id: 'E8uHNgs8', chapters_total: 2, chapters_done: 2, chapters_failed: 0 },
+    ]);
+    expect(t.events.emitChapterCompleted.mock.calls.map((c) => c[0])).toEqual([
+      { manga_id: 'E8uHNgs8', chapter_index: 1, chapter_title: '第1话', last_epi: 1, last_epi_name: '第1话', updated_at: NOW_S },
+      { manga_id: 'E8uHNgs8', chapter_index: 2, chapter_title: '第2话', last_epi: 2, last_epi_name: '第2话', updated_at: NOW_S },
+    ]);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledTimes(1);
+    const done = t.events.emitDownloadCompleted.mock.calls[0][0];
+    expect(done).toMatchObject({
+      manga_id: 'E8uHNgs8',
+      kind: 'full-manga',
+      status: 'done',
+      chapters_total: 2,
+      chapters_failed: 0,
+    });
+    expect(done.manga).toMatchObject({
+      completed: true,
+      last_epi: 2,
+      updated_at: NOW_S,
+      add_date: 1000,
+      thumbnail: '/api/library/E8uHNgs8/thumbnail',
+    });
+
+    // legacy events still fire alongside
+    expect(t.events.emitDownloading).toHaveBeenCalledWith('E8uHNgs8');
+    expect(t.events.emitResponse).toHaveBeenCalledTimes(2);
+    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes updated_at when last_epi advances and on completion, never touches add_date', async () => {
+    const t = setup(newManga({ add_date: 1000 }), ['第1话']);
+    await t.runFull();
+    const patches = t.library.patch.mock.calls.map((c) => c[1] as Partial<Manga>);
+    expect(patches.find((p) => p.last_epi === 1)).toMatchObject({ updated_at: NOW_S });
+    expect(patches.find((p) => p.completed === true)).toMatchObject({ updated_at: NOW_S });
+    expect(patches.some((p) => 'add_date' in p)).toBe(false);
+    expect(t.record().add_date).toBe(1000);
+  });
+
+  it('reports a run where every chapter failed as failed, without writing updated_at', async () => {
+    const t = setup(newManga(), ['第1话', '第2话'], { chapterImages: [{ errorCode: 503 }] });
+    await t.runFull();
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', chapters_total: 2, chapters_failed: 2 }),
+    );
+    expect(t.record().updated_at).toBeUndefined();
+    expect(t.events.emitChapterCompleted).not.toHaveBeenCalled();
+  });
+
+  it('emits nothing download-related when the manga is already up to date', async () => {
+    const t = setup(newManga({ completed: true, last_epi: 5 }), ['a', 'b']);
+    await t.runFull();
+    expect(t.events.emitDownloadStarted).not.toHaveBeenCalled();
+    expect(t.events.emitDownloadCompleted).not.toHaveBeenCalled();
+  });
+
+  it('a chapter list blocked by Cloudflare ends the started run as failed', async () => {
+    const t = setup(newManga(), ['a'], { getChapters: async () => ({ chapters: [], errorCode: 501 }) });
+    await t.runFull();
+    expect(t.events.emitDownloadStarted).toHaveBeenCalled();
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', chapters_total: 0 }),
+    );
+    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('a DMCA chapter list deletes the manga, alerts and completes with manga: null', async () => {
+    const t = setup(newManga(), ['a'], { getChapters: async () => ({ chapters: [], errorCode: 504 }) });
+    await t.runFull();
+    expect(t.library.deleteManga).toHaveBeenCalledWith('E8uHNgs8');
+    expect(t.events.emitDmcaAlert).toHaveBeenCalledWith({ manga_id: 'E8uHNgs8', manga_name: 'Test Manga' });
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', manga: null }),
+    );
+  });
+
+  it('a crash mid-run still ends the run (failed) and propagates the error', async () => {
+    const t = setup(newManga(), ['a'], {
+      getChapters: async () => {
+        throw new Error('python died');
+      },
+    });
+    await expect(t.runFull()).rejects.toThrow('python died');
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed' }),
+    );
+    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('redownload: chapter_completed keeps last_epi, completion writes updated_at', async () => {
+    const t = setup(
+      newManga({ completed: true, last_epi: 2, last_epi_name: '第2话', add_date: 1000 }),
+      ['第1话', '第2话'],
+    );
+    await t.runRedownload();
+    expect(t.events.emitDownloadStarted).toHaveBeenCalledWith({ manga_id: 'E8uHNgs8', kind: 'redownload' });
+    expect(t.events.emitChapterCompleted.mock.calls.map((c) => c[0].last_epi)).toEqual([2, 2]);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'redownload', status: 'done', chapters_total: 2 }),
+    );
+    expect(t.record()).toMatchObject({ updated_at: NOW_S, add_date: 1000, last_epi: 2 });
+  });
+});
+
+describe('DownloadOrchestratorService — chapter start spacing (F10)', () => {
+  it('waits 2–5 s before starting each chapter after the first', async () => {
+    const t = setup(newManga(), ['a', 'b', 'c']);
+    await t.runFull();
+    const waits = t.sleep.mock.calls.map((c) => c[0] as number);
+    expect(waits).toHaveLength(2);
+    for (const ms of waits) {
+      expect(ms).toBeGreaterThanOrEqual(2000);
+      expect(ms).toBeLessThanOrEqual(5000);
+    }
+  });
+
+  it('does not wait before a single chapter', async () => {
+    const t = setup(newManga(), ['a']);
+    await t.runFull();
+    expect(t.sleep).not.toHaveBeenCalled();
+  });
+});
 
 describe('DownloadOrchestratorService — full manga download', () => {
   it('records chapter 1 of a newly added manga and emits response', async () => {

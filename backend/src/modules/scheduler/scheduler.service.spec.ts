@@ -199,6 +199,25 @@ describe('SchedulerService Kavita sync', () => {
     await new Promise((r) => setImmediate(r));
   });
 
+  it('does not hold up boot on an unresponsive Kavita (F21)', async () => {
+    const t = setup([], { kavitaEnabled: true });
+    t.kavita.syncLibrary.mockReturnValue(new Promise(() => undefined));
+    const settled = await Promise.race([
+      t.svc.onModuleInit().then(() => 'init-done'),
+      new Promise((r) => setTimeout(() => r('timed-out'), 200)),
+    ]);
+    expect(settled).toBe('init-done');
+    expect(t.kavita.syncLibrary).toHaveBeenCalledTimes(1);
+    await new Promise((r) => setImmediate(r));
+  });
+
+  it('a failing startup sync is logged, not thrown', async () => {
+    const t = setup([], { kavitaEnabled: true });
+    t.kavita.syncLibrary.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(t.svc.onModuleInit()).resolves.toBeUndefined();
+    await new Promise((r) => setImmediate(r));
+  });
+
   it('the 6-hourly job syncs the library', async () => {
     const t = setup([]);
     await t.svc.handleKavitaSync();

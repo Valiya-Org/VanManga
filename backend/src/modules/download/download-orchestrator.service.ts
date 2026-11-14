@@ -11,6 +11,8 @@ import { ArchiveService } from '../filesystem/archive.service';
 import { FilesystemService } from '../filesystem/filesystem.service';
 import { LibraryService } from '../library/library.service';
 import type { Manga } from '../library/entities/manga.entity';
+import { toApiManga, type ApiManga } from '../library/manga-view';
+import type { DownloadTaskKind } from '../events/events.types';
 import {
   ChapterDto,
   ChapterListResultDto,
@@ -94,34 +96,46 @@ export class DownloadOrchestratorService implements OnModuleInit {
       return;
     }
 
-    this.events.emitDownloading(manga.manga_id);
+    this.announceStart(manga.manga_id, 'full-manga');
     this.logger.log(
       `=== DOWNLOAD START: ${manga.manga_name} (${manga.manga_id}) ===`,
     );
 
-    const list = await this.scraper.getChapters(sourceName, manga.manga_id);
-    if (await this.handleChapterListSentinel(list, manga)) return;
-
-    const start = manga.last_epi <= 1 ? 1 : manga.last_epi + 1;
-    const wanted = list.chapters.filter((c) => c.index >= start);
-
+    let total = 0;
     let failedCount = 0;
-    if (wanted.length === 0) {
-      this.logger.log(`${manga.manga_id}: no new chapters after filter`);
-    } else {
-      failedCount = await this.processChapters(manga, sourceName, wanted);
+    try {
+      const list = await this.scraper.getChapters(sourceName, manga.manga_id);
+      if (await this.handleChapterListSentinel(list, manga)) {
+        this.announceEnd(manga.manga_id, 'full-manga', 'failed', 0, 0);
+        return;
+      }
+
+      // Re-running a task (e.g. restored after a restart) resumes here:
+      // chapters up to last_epi are already recorded and are skipped.
+      const start = manga.last_epi <= 1 ? 1 : manga.last_epi + 1;
+      const wanted = list.chapters.filter((c) => c.index >= start);
+      total = wanted.length;
+
+      if (wanted.length === 0) {
+        this.logger.log(`${manga.manga_id}: no new chapters after filter`);
+      } else {
+        failedCount = await this.processChapters(manga, sourceName, wanted);
+      }
+    } catch (err) {
+      this.announceEnd(manga.manga_id, 'full-manga', 'failed', total, failedCount);
+      throw err;
     }
 
     // Nothing at all came down (source blocked, layout changed, ...). Leave
     // the record untouched so the next scan retries it: marking it completed
     // would also copy `serialization` into download_switch, and a finished
     // series would then never be scanned again.
-    if (wanted.length > 0 && failedCount === wanted.length) {
+    if (total > 0 && failedCount === total) {
       this.logger.error(
         `=== DOWNLOAD FAILED: ${manga.manga_name} (${manga.manga_id}) — ` +
-          `all ${wanted.length} chapter(s) failed ===`,
+          `all ${total} chapter(s) failed ===`,
       );
-      this.events.emitComplete({ manga_id: manga.manga_id });
+      this.announceEnd(manga.manga_id, 'full-manga', 'failed', total, failedCount);
       return;
     }
 
@@ -129,13 +143,14 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const patch: Partial<Manga> = {
       completed: true,
       serialization: meta.serialization,
+      updated_at: this.nowSeconds(),
     };
     if (!manga.completed) {
       patch.download_switch = meta.serialization;
     }
     await this.library.patch(manga.manga_id, patch);
 
-    this.events.emitComplete({ manga_id: manga.manga_id });
+    this.announceEnd(manga.manga_id, 'full-manga', 'done', total, failedCount);
     this.logger.log(
       `=== DOWNLOAD DONE: ${manga.manga_name} (${manga.manga_id}) ===`,
     );
@@ -153,15 +168,31 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const manga = this.library.get(payload.mangaId);
     const sourceName = manga.source ?? 'dgmanga';
 
-    this.events.emitDownloading(manga.manga_id);
+    const total = payload.chapters.length;
+    this.announceStart(manga.manga_id, 'redownload');
     this.logger.log(
       `=== REDOWNLOAD START: ${manga.manga_name} (${manga.manga_id}), ` +
-        `${payload.chapters.length} chapter(s) ===`,
+        `${total} chapter(s) ===`,
     );
-    await this.processChapters(manga, sourceName, payload.chapters, {
-      updateLastEpi: false,
-    });
-    this.events.emitComplete({ manga_id: manga.manga_id });
+    let failedCount: number;
+    try {
+      failedCount = await this.processChapters(manga, sourceName, payload.chapters, {
+        updateLastEpi: false,
+      });
+      if (failedCount < total) {
+        await this.library.patch(manga.manga_id, { updated_at: this.nowSeconds() });
+      }
+    } catch (err) {
+      this.announceEnd(manga.manga_id, 'redownload', 'failed', total, total);
+      throw err;
+    }
+    this.announceEnd(
+      manga.manga_id,
+      'redownload',
+      total > 0 && failedCount === total ? 'failed' : 'done',
+      total,
+      failedCount,
+    );
     this.logger.log(
       `=== REDOWNLOAD DONE: ${manga.manga_name} (${manga.manga_id}) ===`,
     );
@@ -202,9 +233,25 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const queue = chapters.slice();
     const inFlight = new Set<Promise<void>>();
     const failedChapters: string[] = [];
+    const total = chapters.length;
+    let done = 0;
+    let started = 0;
+
+    const progress = () =>
+      this.events.emitDownloadProgress({
+        manga_id: manga.manga_id,
+        chapters_total: total,
+        chapters_done: done,
+        chapters_failed: failedChapters.length,
+      });
+    progress();
 
     while (queue.length > 0 || inFlight.size > 0) {
       while (queue.length > 0 && inFlight.size < this.chapterConcurrency) {
+        // Space out chapter starts like Flask did (2–5 s), to stay under
+        // the source's rate limit.
+        if (started > 0) await this.sleep(this.chapterStartDelayMs());
+        started += 1;
         const chapter = queue.shift()!;
         const task = this.processOneChapter(
           manga,
@@ -221,6 +268,8 @@ export class DownloadOrchestratorService implements OnModuleInit {
           })
           .finally(() => {
             inFlight.delete(task);
+            done += 1;
+            progress();
           });
         inFlight.add(task);
       }
@@ -304,8 +353,9 @@ export class DownloadOrchestratorService implements OnModuleInit {
         await this.library.patch(manga.manga_id, {
           last_epi: chapter.index,
           last_epi_name: safeTitle,
+          updated_at: this.nowSeconds(),
         });
-        // 'response' — tell the frontend this manga's newest episode advanced.
+        // legacy 'response' — this manga's newest episode advanced.
         this.events.emitResponse({
           manga_id: manga.manga_id,
           last_epi_name: safeTitle,
@@ -313,6 +363,56 @@ export class DownloadOrchestratorService implements OnModuleInit {
         });
       }
     }
+
+    const current = toApiManga(this.library.get(manga.manga_id));
+    this.events.emitChapterCompleted({
+      manga_id: manga.manga_id,
+      chapter_index: chapter.index,
+      chapter_title: safeTitle,
+      last_epi: current.last_epi,
+      last_epi_name: current.last_epi_name,
+      updated_at: current.updated_at,
+    });
+  }
+
+  // -------------------------------------------- run lifecycle events
+
+  private announceStart(mangaId: string, kind: DownloadTaskKind): void {
+    this.events.emitDownloading(mangaId); // legacy
+    this.events.emitDownloadStarted({ manga_id: mangaId, kind });
+  }
+
+  /** Ends a run that announceStart() opened, on every path. */
+  private announceEnd(
+    mangaId: string,
+    kind: DownloadTaskKind,
+    status: 'done' | 'failed',
+    total: number,
+    failed: number,
+  ): void {
+    this.events.emitComplete({ manga_id: mangaId }); // legacy
+    let manga: ApiManga | null;
+    try {
+      manga = toApiManga(this.library.get(mangaId));
+    } catch {
+      manga = null; // removed meanwhile (DMCA)
+    }
+    this.events.emitDownloadCompleted({
+      manga_id: mangaId,
+      kind,
+      status,
+      chapters_total: total,
+      chapters_failed: failed,
+      manga,
+    });
+  }
+
+  private nowSeconds(): number {
+    return Math.floor(Date.now() / 1000);
+  }
+
+  private chapterStartDelayMs(): number {
+    return 2000 + Math.random() * 3000;
   }
 
   /** Fetch a chapter's image list, waiting out 429s. The legacy scraper

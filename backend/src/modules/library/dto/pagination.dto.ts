@@ -1,9 +1,11 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Min } from 'class-validator';
 import type { Manga } from '../entities/manga.entity';
 
 export class PaginationQueryDto {
   /** 1-based start index. Mirrors the legacy `start` field. */
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -11,6 +13,7 @@ export class PaginationQueryDto {
   start: number = 1;
 
   /** Page size. Mirrors the legacy `limit` field. */
+  @ApiPropertyOptional({ minimum: 1, default: 10 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

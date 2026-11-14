@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -8,18 +9,23 @@ import {
 } from 'class-validator';
 
 export class SubmitFullDownloadDto {
-  @IsString() manga_id!: string;
+  @ApiProperty({ example: '-LoL2tSY' })
+  @IsString()
+  manga_id!: string;
 }
 
 export class ChapterPickDto {
-  @IsInt() index!: number;
-  @IsString() title!: string;
-  @IsString() url!: string;
+  @ApiProperty({ example: 1 }) @IsInt() index!: number;
+  @ApiProperty({ example: '第1话' }) @IsString() title!: string;
+  @ApiProperty({ example: 'https://dogemanga.com/p/abc' }) @IsString() url!: string;
 }
 
 export class SubmitRedownloadDto {
-  @IsString() manga_id!: string;
+  @ApiProperty({ example: '-LoL2tSY' })
+  @IsString()
+  manga_id!: string;
 
+  @ApiProperty({ type: [ChapterPickDto] })
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

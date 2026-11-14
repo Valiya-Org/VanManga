@@ -1,6 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
+import { mkdirSync, readFileSync } from 'fs';
+import { promises as fs } from 'fs';
+import { dirname } from 'path';
+import { QUEUE_CHANGED } from '../../../common/events/app.events';
+import type { AppConfig } from '../../../config/configuration';
 import {
+  QueueSnapshot,
+  RedownloadPayload,
   TaskHandle,
   TaskKind,
   TaskPayload,
@@ -11,19 +20,48 @@ import {
  *  task is finished. Throws on irrecoverable failure. */
 export type TaskExecutor = (payload: TaskPayload) => Promise<void>;
 
-/** In-memory FIFO with concurrency=1 — mirrors the original gevent
- *  TaskQueue (utils/TaskQueue.py) which processes one manga at a time.
+/** On-disk shape of queue.json. */
+interface PersistedQueue {
+  version: 1;
+  /** Active task first (if any), then pending tasks in execution order. */
+  tasks: Array<{ id: string; payload: TaskPayload; enqueuedAt: number }>;
+}
+
+/** FIFO with concurrency=1 — mirrors the original gevent TaskQueue
+ *  (utils/TaskQueue.py), which processes one manga at a time.
  *
- *  Why not Bull/Redis? See Stage-4 design notes: a personal-use scraper
- *  needs sequential single-worker behaviour; persisting tasks across
- *  restarts is not worth the operational cost (boot scanning re-fills
- *  the queue from library state on startup anyway). */
+ *  The queue is persisted to queue.json (next to the library file unless
+ *  QUEUE_FILE says otherwise) after every enqueue, start and completion, and
+ *  restored on boot: an interrupted running task goes back to the head,
+ *  pending ones follow in order. Re-running a full-manga task is safe: it
+ *  starts from last_epi + 1 (DownloadOrchestratorService.runFullManga), so
+ *  chapters recorded before the interruption are not fetched again. */
 @Injectable()
-export class TaskQueueService {
+export class TaskQueueService implements OnModuleInit {
   private readonly logger = new Logger(TaskQueueService.name);
+  private readonly file: string;
   private readonly pending: TaskHandle[] = [];
   private active: TaskHandle | null = null;
   private executor: TaskExecutor | null = null;
+  private writeChain: Promise<void> = Promise.resolve();
+
+  constructor(
+    config: ConfigService<AppConfig, true>,
+    private readonly events: EventEmitter2,
+  ) {
+    this.file = config.get('storage.queueFile', { infer: true });
+  }
+
+  /** Restore synchronously so the queue is complete before anything can
+   *  enqueue (boot scan, add requests) and dedupe against it. */
+  onModuleInit(): void {
+    const restored = this.readPersisted();
+    if (restored.length === 0) return;
+    // Restored tasks go ahead of anything enqueued during module init.
+    this.pending.unshift(...restored);
+    this.logger.log(`Restored ${restored.length} task(s) from ${this.file}`);
+    void this.drain();
+  }
 
   /** Bound by DownloadOrchestratorService at module init.
    *  Decouples the queue from the orchestrator (no circular DI). */
@@ -32,9 +70,24 @@ export class TaskQueueService {
       throw new Error('TaskQueueService executor already registered');
     }
     this.executor = executor;
+    void this.drain();
   }
 
+  /** Queue a task, or return the existing handle it duplicates:
+   *  - full-manga / rezip: an identical task already pending or running
+   *  - redownload: a pending redownload of the same manga, into which the
+   *    new chapters are merged (by url) */
   enqueue(payload: TaskPayload): TaskHandle {
+    const duplicate = this.findDuplicate(payload);
+    if (duplicate) {
+      if (payload.kind === TaskKind.REDOWNLOAD) {
+        this.mergeChapters(duplicate.payload as RedownloadPayload, payload);
+        this.changed();
+      }
+      this.logger.log(`De-duplicated ${this.describe(duplicate)}`);
+      return duplicate;
+    }
+
     const handle: TaskHandle = {
       id: randomUUID(),
       payload,
@@ -43,12 +96,13 @@ export class TaskQueueService {
     };
     this.pending.push(handle);
     this.logger.log(`Enqueued ${this.describe(handle)} (queue size=${this.pending.length})`);
+    this.changed();
     void this.drain();
     return handle;
   }
 
   /** Synchronously check whether a manga ID is in-flight or queued.
-   *  Used by LibraryController.deleteManga to refuse delete on busy. */
+   *  Used by the delete routes to refuse deleting a busy manga. */
   isMangaBusy(mangaId: string): boolean {
     if (this.activeMangaId() === mangaId) return true;
     return this.pending.some((t) => this.payloadMangaId(t.payload) === mangaId);
@@ -59,7 +113,6 @@ export class TaskQueueService {
     return this.payloadMangaId(this.active.payload);
   }
 
-  /** Read-only snapshot of the queue for /api/download/queue. */
   pendingSummaries(): TaskSummaryDto[] {
     return this.pending.map((t) => this.summarise(t));
   }
@@ -68,12 +121,17 @@ export class TaskQueueService {
     return this.active ? this.summarise(this.active) : null;
   }
 
+  snapshot(): QueueSnapshot {
+    return { active: this.activeSummary(), pending: this.pendingSummaries() };
+  }
+
+  /** Resolves once every scheduled write has reached the disk. */
+  flushPersistence(): Promise<void> {
+    return this.writeChain;
+  }
+
   private async drain(): Promise<void> {
-    if (this.active) return;
-    if (!this.executor) {
-      this.logger.warn('drain() called before executor was registered');
-      return;
-    }
+    if (this.active || !this.executor) return;
     const next = this.pending.shift();
     if (!next) return;
 
@@ -81,6 +139,7 @@ export class TaskQueueService {
     next.status = 'running';
     next.startedAt = Date.now();
     this.logger.log(`Started ${this.describe(next)}`);
+    this.changed();
 
     try {
       await this.executor(next.payload);
@@ -88,18 +147,127 @@ export class TaskQueueService {
     } catch (err) {
       next.status = 'failed';
       next.error = (err as Error).message;
-      this.logger.error(
-        `${this.describe(next)} failed: ${next.error}`,
-        (err as Error).stack,
-      );
+      this.logger.error(`${this.describe(next)} failed: ${next.error}`, (err as Error).stack);
     } finally {
       next.finishedAt = Date.now();
       this.active = null;
-      // Schedule next drain on the microtask queue so the caller of
-      // enqueue() resolves before the next task starts.
+      this.changed();
+      // Start the next task on a fresh tick so enqueue() callers resolve first.
       setImmediate(() => void this.drain());
     }
   }
+
+  private findDuplicate(payload: TaskPayload): TaskHandle | undefined {
+    const mangaId = this.payloadMangaId(payload);
+    const same = (t: TaskHandle) =>
+      t.payload.kind === payload.kind && this.payloadMangaId(t.payload) === mangaId;
+
+    if (payload.kind === TaskKind.REDOWNLOAD) {
+      // A running redownload has fixed its chapter list; queue a new one.
+      return this.pending.find(same);
+    }
+    if (this.active && same(this.active)) return this.active;
+    return this.pending.find(same);
+  }
+
+  private mergeChapters(target: RedownloadPayload, extra: RedownloadPayload): void {
+    const known = new Set(target.chapters.map((c) => c.url));
+    for (const chapter of extra.chapters) {
+      if (!known.has(chapter.url)) {
+        target.chapters.push(chapter);
+        known.add(chapter.url);
+      }
+    }
+  }
+
+  /** Persist and broadcast the new state. */
+  private changed(): void {
+    this.persist();
+    this.events.emit(QUEUE_CHANGED, this.snapshot());
+  }
+
+  // ------------------------------------------------------------ persistence
+
+  private persist(): void {
+    this.writeChain = this.writeChain
+      .then(() => this.writeAtomic())
+      .catch((err: unknown) =>
+        this.logger.error(`Could not write ${this.file}: ${(err as Error).message}`),
+      );
+  }
+
+  /** Serialised through writeChain; each write captures the state at the
+   *  moment it runs, so the last write always reflects the latest state. */
+  private async writeAtomic(): Promise<void> {
+    const tasks = [...(this.active ? [this.active] : []), ...this.pending].map((t) => ({
+      id: t.id,
+      payload: t.payload,
+      enqueuedAt: t.enqueuedAt,
+    }));
+    const body: PersistedQueue = { version: 1, tasks };
+    const tmp = `${this.file}.tmp`;
+    await fs.mkdir(dirname(this.file), { recursive: true });
+    await fs.writeFile(tmp, JSON.stringify(body, null, 2), 'utf8');
+    await fs.rename(tmp, this.file);
+  }
+
+  /** A missing file is an empty queue. A corrupt one is logged and
+   *  ignored: unlike the library, losing the queue only loses work the
+   *  next boot scan re-queues anyway. */
+  private readPersisted(): TaskHandle[] {
+    let raw: string;
+    try {
+      raw = readFileSync(this.file, 'utf8');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        this.logger.warn(`Cannot read ${this.file}: ${(err as Error).message}; starting with an empty queue`);
+      } else {
+        mkdirSync(dirname(this.file), { recursive: true });
+      }
+      return [];
+    }
+
+    let parsed: Partial<PersistedQueue>;
+    try {
+      parsed = JSON.parse(raw) as Partial<PersistedQueue>;
+    } catch (err) {
+      this.logger.warn(`${this.file} is not valid JSON (${(err as Error).message}); starting with an empty queue`);
+      return [];
+    }
+
+    const entries = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    const handles: TaskHandle[] = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry.id !== 'string' || !this.isValidPayload(entry.payload)) {
+        this.logger.warn(`Skipping malformed queue entry: ${JSON.stringify(entry)}`);
+        continue;
+      }
+      handles.push({
+        id: entry.id,
+        payload: entry.payload,
+        status: 'pending',
+        enqueuedAt: typeof entry.enqueuedAt === 'number' ? entry.enqueuedAt : Date.now(),
+      });
+    }
+    return handles;
+  }
+
+  private isValidPayload(p: unknown): p is TaskPayload {
+    if (!p || typeof p !== 'object') return false;
+    const payload = p as Record<string, unknown>;
+    switch (payload.kind) {
+      case TaskKind.REZIP:
+        return true;
+      case TaskKind.FULL_MANGA:
+        return typeof payload.mangaId === 'string';
+      case TaskKind.REDOWNLOAD:
+        return typeof payload.mangaId === 'string' && Array.isArray(payload.chapters);
+      default:
+        return false;
+    }
+  }
+
+  // ------------------------------------------------------------ helpers
 
   private payloadMangaId(payload: TaskPayload): string | null {
     return payload.kind === TaskKind.REZIP ? null : payload.mangaId;
@@ -107,9 +275,7 @@ export class TaskQueueService {
 
   private describe(t: TaskHandle): string {
     const id = this.payloadMangaId(t.payload);
-    return id
-      ? `task[${t.payload.kind}, ${id}]`
-      : `task[${t.payload.kind}]`;
+    return id ? `task[${t.payload.kind}, ${id}]` : `task[${t.payload.kind}]`;
   }
 
   private summarise(t: TaskHandle): TaskSummaryDto {

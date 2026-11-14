@@ -7,8 +7,10 @@ export interface Manga {
   manga_name: string;
   artist_name: string;
   newest_epi: string;
-  /** Either base64-encoded JPG (legacy format from search results) or
-   *  a `MANGA_BASE_URL/api/.../thumbnail?mid=...` URL after persisting. */
+  /** Cover URL. Since P2 new records store the relative
+   *  `/api/library/<id>/thumbnail`; older ones hold absolute
+   *  `MANGA_BASE_URL/...` URLs. Canonical routes normalise on read
+   *  (see manga-view.ts). */
   thumbnail: string;
 
   /** Last successfully downloaded chapter index (1-based). */
@@ -21,8 +23,13 @@ export interface Manga {
   serialization: 0 | 1;
   /** 0 = auto-update enabled, 1 = paused (user-controlled). */
   download_switch: 0 | 1;
-  /** Unix epoch seconds (UTC) when the manga was added. */
+  /** Unix epoch seconds (UTC) when the manga was added. Never modified. */
   add_date: number;
+
+  /** Unix epoch seconds of the last update: written when the newest
+   *  downloaded chapter advances or a download completes. Absent in
+   *  pre-P2 records — read it through toApiManga (defaults to add_date). */
+  updated_at?: number;
 
   /** Source identifier the manga was added from. New in NestJS rewrite —
    *  defaults to 'dgmanga' for legacy library entries on first migration. */

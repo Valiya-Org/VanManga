@@ -1,15 +1,19 @@
-import {
-  Controller,
-  Get,
-  HttpStatus,
-  Param,
-  Query,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ApiException } from '../../common/http/api-exception';
+import { ok } from '../../common/http/envelope';
 import { SearchCacheService } from '../search-cache/search-cache.service';
+import type { SearchResultDto } from './dto';
+import { PythonRunnerError } from './python/python-runner.types';
+import { assertScrapeOk, callScraper, toScraperFailure } from './scrape-errors';
 import { ScraperService } from './scraper.service';
 
+/** scrape_cli.py reports "nothing found" as source status 457. */
+const NO_RESULTS = 457;
+
+/** Canonical scraper routes — docs/api-contract.md §3.2. */
+@ApiTags('scraper')
 @Controller('scraper')
 export class ScraperController {
   constructor(
@@ -18,33 +22,43 @@ export class ScraperController {
   ) {}
 
   @Get('sources')
+  @ApiOperation({ summary: 'Registered manga sources' })
   listSources() {
-    return { data: this.scraper.listSources(), code: 200 };
+    return ok(this.scraper.listSources());
   }
 
-  /** Search. By default each result carries the base64 cover in `thumbnail`
-   *  (legacy contract). Pass `?thumb=url` to get a lean payload where
-   *  `thumbnail` is instead a URL to the cached-thumbnail endpoint below —
-   *  the recommended path for new clients (no base64 in the JSON). */
+  /** Each result's `thumbnail` is a URL to the cached-cover endpoint below;
+   *  the base64 cover only travels on the legacy route. */
   @Get(':source/search')
-  async search(
-    @Param('source') source: string,
-    @Query('q') q: string,
-    @Query('thumb') thumb?: string,
-  ) {
-    const results = await this.scraper.search(source, q);
-    if (thumb === 'url') {
-      return results.map((r) => ({
-        ...r,
-        thumbnail: `/api/scraper/${source}/search-thumbnail/${r.manga_id}`,
-      }));
+  @ApiOperation({ summary: 'Search a source; no results is 200 []' })
+  @ApiQuery({ name: 'q', required: true })
+  async search(@Param('source') source: string, @Query('q') q?: string) {
+    const query = (q ?? '').trim();
+    if (query === '') {
+      throw new ApiException(400, 'query-required', { message: 'q must not be empty' });
     }
-    return results;
+
+    let results: SearchResultDto[];
+    try {
+      results = await this.scraper.search(source, query);
+    } catch (err) {
+      if (err instanceof PythonRunnerError && err.errorCode === NO_RESULTS) {
+        return ok([]);
+      }
+      throw toScraperFailure(err);
+    }
+
+    return ok(
+      results.map((r) => ({
+        ...r,
+        source: r.source ?? source,
+        thumbnail: `/api/scraper/${encodeURIComponent(source)}/search-thumbnail/${encodeURIComponent(r.manga_id)}`,
+      })),
+    );
   }
 
-  /** Serves a cached search candidate's cover image as binary JPEG, so
-   *  `?thumb=url` clients can render `<img src=...>` without base64. */
   @Get(':source/search-thumbnail/:mangaId')
+  @ApiOperation({ summary: "A search candidate's cover (image/jpeg) while it is cached" })
   searchThumbnail(
     @Param('source') source: string,
     @Param('mangaId') mangaId: string,
@@ -52,33 +66,41 @@ export class ScraperController {
   ): void {
     const cached = this.searchCache.get(source, mangaId);
     if (!cached) {
-      res.status(HttpStatus.NOT_FOUND).json({ data: false, code: 404 });
+      res.status(404).json({ code: 404, error: 'thumbnail-not-found' });
       return;
     }
     res.type('image/jpeg').send(Buffer.from(cached.thumbnail, 'base64'));
   }
 
   @Get(':source/manga/:mangaId/metadata')
-  metadata(
-    @Param('source') source: string,
-    @Param('mangaId') mangaId: string,
-  ) {
-    return this.scraper.getMetadata(source, mangaId);
+  @ApiOperation({ summary: 'Debug: chapter count and serialisation at the source' })
+  async metadata(@Param('source') source: string, @Param('mangaId') mangaId: string) {
+    const meta = assertScrapeOk(
+      await callScraper(() => this.scraper.getMetadata(source, mangaId)),
+    );
+    return ok({ chapterCount: meta.chapterCount, serialization: meta.serialization });
   }
 
   @Get(':source/manga/:mangaId/chapters')
-  chapters(
-    @Param('source') source: string,
-    @Param('mangaId') mangaId: string,
-  ) {
-    return this.scraper.getChapters(source, mangaId);
+  @ApiOperation({ summary: 'Debug: chapter list at the source' })
+  async chapters(@Param('source') source: string, @Param('mangaId') mangaId: string) {
+    const list = assertScrapeOk(
+      await callScraper(() => this.scraper.getChapters(source, mangaId)),
+    );
+    return ok(list.chapters);
   }
 
   @Get(':source/chapter-images')
-  chapterImages(
-    @Param('source') source: string,
-    @Query('url') url: string,
-  ) {
-    return this.scraper.getChapterImages(source, url);
+  @ApiOperation({ summary: "Debug: a chapter's image URLs" })
+  @ApiQuery({ name: 'url', required: true })
+  async chapterImages(@Param('source') source: string, @Query('url') url: string) {
+    const images = assertScrapeOk(
+      await callScraper(() => this.scraper.getChapterImages(source, url)),
+    );
+    return ok({
+      chapterTitle: images.chapterTitle,
+      imageUrls: images.imageUrls,
+      requestHeaders: images.requestHeaders,
+    });
   }
 }
