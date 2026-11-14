@@ -33,7 +33,7 @@ A single image holds the NestJS backend, the Python scraper
 the **repo root**:
 
 ```bash
-docker build -f backend/Dockerfile -t vanmanga .
+docker build -t vanmanga .
 ```
 
 Data paths match the legacy Flask container, so existing volumes mount

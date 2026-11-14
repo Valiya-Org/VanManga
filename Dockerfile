@@ -1,9 +1,9 @@
 # VanManga — NestJS backend + Python scraper + Vue3 SPA in one image.
 #
-# Build from the REPO ROOT (the image needs scrape_cli.py, modules/, utils/
+# Build from the repo root (the image needs scrape_cli.py, modules/, utils/
 # and frontend/ alongside backend/):
 #
-#   docker build -f backend/Dockerfile -t vanmanga .
+#   docker build -t vanmanga .
 #
 # Debian slim rather than alpine: lxml / gevent ship manylinux wheels only,
 # so alpine would compile them from source.
