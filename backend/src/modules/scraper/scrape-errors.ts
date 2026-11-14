@@ -1,4 +1,4 @@
-import { HttpException } from '@nestjs/common';
+import { HttpException, Logger } from '@nestjs/common';
 import { ApiException } from '../../common/http/api-exception';
 
 /** Map a scraper sentinel `errorCode` (see scraper/dto) to the canonical
@@ -34,9 +34,14 @@ export async function callScraper<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+const logger = new Logger('ScraperFailure');
+
+/** The runner's error carries Python stdout/stderr, parse errors and paths:
+ *  it is logged here and the client gets a fixed message. */
 export function toScraperFailure(err: unknown): HttpException {
   if (err instanceof HttpException) return err;
-  return new ApiException(502, 'scraper-failed', { message: (err as Error).message });
+  logger.warn(`Scraper call failed: ${err instanceof Error ? err.message : String(err)}`);
+  return new ApiException(502, 'scraper-failed', { message: 'The scraper failed' });
 }
 
 /** Throw the canonical failure for a sentinel-carrying result. */

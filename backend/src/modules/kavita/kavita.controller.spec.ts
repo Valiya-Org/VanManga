@@ -7,7 +7,7 @@ import { KavitaController } from './kavita.controller';
 import { KavitaService } from './kavita.service';
 
 function axiosError(status?: number): Error {
-  return Object.assign(new Error(status ? `Request failed with status code ${status}` : 'ECONNREFUSED'), {
+  return Object.assign(new Error(status ? `Request failed with status code ${status}` : 'connect ECONNREFUSED 172.18.0.3:5000'), {
     response: status ? { status } : undefined,
   });
 }
@@ -84,6 +84,9 @@ describe('KavitaController (HTTP, production ValidationPipe)', () => {
       .send({ username: 'alice', password: 'x' })
       .expect(502);
     expect(res.body.error).toBe('kavita-unreachable');
+    // The upstream error (internal address) is logged, never returned.
+    expect(JSON.stringify(res.body)).not.toContain('172.18.0.3');
+    expect(res.body.message).toBe('Kavita is unreachable or returned an error');
 
     kavita.refreshToken.mockRejectedValue(axiosError(500));
     const r2 = await http().post('/api/kavita/refreshtoken').send({ jwt: 'j', refreshToken: 'r' }).expect(502);

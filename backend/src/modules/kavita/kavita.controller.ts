@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Logger, Post } from '@nestjs/common';
 import { ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
 import type { AxiosError } from 'axios';
 import { IsString } from 'class-validator';
@@ -26,6 +26,8 @@ class KavitaRefreshDto {
 @ApiTags('kavita')
 @Controller('kavita')
 export class KavitaController {
+  private readonly logger = new Logger(KavitaController.name);
+
   constructor(private readonly kavita: KavitaService) {}
 
   /** Legacy shape kept on purpose: the current frontend calls this on
@@ -82,8 +84,10 @@ export class KavitaController {
     if (status === 400 || status === 401) {
       return new ApiException(403, rejected, { message: `Kavita answered ${status}` });
     }
+    // The upstream error names internal hosts/ports: log it, don't return it.
+    this.logger.warn(`Kavita request failed: ${(err as Error).message}`);
     return new ApiException(502, 'kavita-unreachable', {
-      message: (err as Error).message,
+      message: 'Kavita is unreachable or returned an error',
     });
   }
 }

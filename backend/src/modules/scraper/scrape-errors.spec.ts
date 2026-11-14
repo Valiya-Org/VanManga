@@ -34,6 +34,14 @@ describe('scrape error mapping', () => {
     expect((err as ApiException).errorCode).toBe('scraper-failed');
   });
 
+  it('callScraper does not return the runner detail to the client', async () => {
+    const err = (await callScraper(() =>
+      Promise.reject(new PythonRunnerError('Unexpected token < in JSON: <html>/srv/app')),
+    ).catch((e: unknown) => e)) as ApiException;
+    expect(JSON.stringify(err.getResponse())).not.toContain('/srv/app');
+    expect(err.message).toBe('The scraper failed');
+  });
+
   it('callScraper lets HTTP exceptions through', async () => {
     const nf = new NotFoundException('x');
     await expect(callScraper(() => Promise.reject(nf))).rejects.toBe(nf);
