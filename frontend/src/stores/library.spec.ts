@@ -76,6 +76,121 @@ describe('library store · load, sort, filter', () => {
   });
 });
 
+describe('library store · load vs live updates', () => {
+  const completed = (manga: ReturnType<typeof makeManga> | null, id = 'a') => ({
+    manga_id: id,
+    kind: 'full-manga' as const,
+    status: 'done' as const,
+    chapters_total: 1,
+    chapters_failed: 0,
+    manga,
+  });
+
+  it('a removal during a load does not reappear from the snapshot', async () => {
+    const lib = await loaded([makeManga({ manga_id: 'a' }), makeManga({ manga_id: 'b' })]);
+    const slow = server.replyDeferred();
+    const pending = lib.load();
+    await slow.received;
+
+    lib.applyDmcaAlert({ manga_id: 'a', manga_name: 'A' });
+    slow.resolve(200, ok([makeManga({ manga_id: 'a' }), makeManga({ manga_id: 'b' })]));
+    await pending;
+
+    expect(lib.byId('a')).toBeUndefined();
+    expect(lib.byId('b')).toBeTruthy();
+  });
+
+  it('a download_completed record during a load is not replaced by the older snapshot', async () => {
+    const lib = await loaded([makeManga({ manga_id: 'a', last_epi: 1 })]);
+    const slow = server.replyDeferred();
+    const pending = lib.load();
+    await slow.received;
+
+    const fresh = makeManga({ manga_id: 'a', last_epi: 9, completed: true });
+    lib.applyDownloadCompleted(completed(fresh));
+    slow.resolve(200, ok([makeManga({ manga_id: 'a', last_epi: 1 }), makeManga({ manga_id: 'b' })]));
+    await pending;
+
+    expect(lib.byId('a')).toEqual(fresh);
+    expect(lib.byId('b')).toBeTruthy();
+  });
+
+  it('a chapter_completed patch during a load survives the snapshot', async () => {
+    const lib = useLibraryStore();
+    const slow = server.replyDeferred();
+    const pending = lib.load();
+    await slow.received;
+
+    lib.applyChapterCompleted({
+      manga_id: 'a',
+      chapter_index: 5,
+      chapter_title: '5',
+      last_epi: 5,
+      last_epi_name: '5',
+      updated_at: 999,
+    });
+    slow.resolve(200, ok([makeManga({ manga_id: 'a', last_epi: 2, newest_epi: 'from-server' })]));
+    await pending;
+
+    expect(lib.byId('a')).toMatchObject({ last_epi: 5, updated_at: 999, newest_epi: 'from-server' });
+  });
+
+  it('an upsert during a load of a manga missing from the snapshot is kept', async () => {
+    const lib = useLibraryStore();
+    const slow = server.replyDeferred();
+    const pending = lib.load();
+    await slow.received;
+
+    lib.applyDownloadCompleted(completed(makeManga({ manga_id: 'new' }), 'new'));
+    slow.resolve(200, ok([makeManga({ manga_id: 'a' })]));
+    await pending;
+
+    expect(lib.items.map((m) => m.manga_id)).toEqual(['a', 'new']);
+  });
+
+  it('changes made before the load started do not override it', async () => {
+    const lib = await loaded([makeManga({ manga_id: 'a', last_epi: 1 })]);
+    lib.applyDownloadCompleted(completed(makeManga({ manga_id: 'a', last_epi: 3 })));
+    server.replyOnce(200, ok([makeManga({ manga_id: 'a', last_epi: 4 })]));
+    await lib.load();
+    expect(lib.byId('a')!.last_epi).toBe(4);
+  });
+
+  it('overlapping loads: only the latest response is applied, loading stays true until both end', async () => {
+    const lib = useLibraryStore();
+    const first = server.replyDeferred();
+    const second = server.replyDeferred();
+    const p1 = lib.load();
+    const p2 = lib.load();
+    await Promise.all([first.received, second.received]);
+    expect(lib.loading).toBe(true);
+
+    second.resolve(200, ok([makeManga({ manga_id: 'newer' })]));
+    await p2;
+    expect(lib.loading).toBe(true);
+    expect(lib.items.map((m) => m.manga_id)).toEqual(['newer']);
+
+    first.resolve(200, ok([makeManga({ manga_id: 'older' })]));
+    await p1;
+    expect(lib.loading).toBe(false);
+    expect(lib.items.map((m) => m.manga_id)).toEqual(['newer']);
+  });
+
+  it('a stale failure does not set loadError over a newer success', async () => {
+    const lib = useLibraryStore();
+    const first = server.replyDeferred();
+    const second = server.replyDeferred();
+    const p1 = lib.load();
+    const p2 = lib.load();
+    await Promise.all([first.received, second.received]);
+    second.resolve(200, ok([]));
+    first.networkError();
+    await Promise.all([p1, p2]);
+    expect(lib.loadError).toBeNull();
+    expect(lib.loaded).toBe(true);
+  });
+});
+
 describe('library store · add flow', () => {
   const candidate = makeCandidate({ manga_id: '-new' });
 

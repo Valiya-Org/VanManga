@@ -58,6 +58,55 @@ describe('queue store', () => {
     expect(q.loadError).toMatchObject({ error: 'network-error' });
   });
 
+  it('a queue_updated received during a load supersedes the load result', async () => {
+    const q = useQueueStore();
+    const slow = server.replyDeferred();
+    const pending = q.load();
+    await slow.received;
+    expect(q.loading).toBe(true);
+
+    q.applySnapshot(snapshot(task('live', 'b', 'running')));
+    slow.resolve(200, { code: 200, data: snapshot(task('stale', 'a', 'running')) });
+    await pending;
+
+    expect(q.active?.id).toBe('live');
+    expect(q.loaded).toBe(true);
+    expect(q.loading).toBe(false);
+  });
+
+  it('progress received during a load is not dropped by the snapshot', async () => {
+    const q = useQueueStore();
+    const slow = server.replyDeferred();
+    const pending = q.load();
+    await slow.received;
+
+    q.applyStarted({ manga_id: 'b', kind: 'full-manga' });
+    q.applyProgress({ manga_id: 'b', chapters_total: 4, chapters_done: 1, chapters_failed: 0 });
+    slow.resolve(200, { code: 200, data: snapshot(task('t1', 'a', 'running')) });
+    await pending;
+
+    expect(q.active?.id).toBe('t1');
+    expect(q.progressOf('b')).toMatchObject({ total: 4, done: 1 });
+  });
+
+  it('overlapping loads: only the latest response is applied', async () => {
+    const q = useQueueStore();
+    const first = server.replyDeferred();
+    const second = server.replyDeferred();
+    const p1 = q.load();
+    const p2 = q.load();
+    await Promise.all([first.received, second.received]);
+
+    second.resolve(200, { code: 200, data: snapshot(task('new', 'a', 'running')) });
+    await p2;
+    expect(q.loading).toBe(true);
+    first.resolve(200, { code: 200, data: snapshot(task('old', 'a', 'running')) });
+    await p1;
+
+    expect(q.active?.id).toBe('new');
+    expect(q.loading).toBe(false);
+  });
+
   it('applySnapshot replaces the whole queue state', () => {
     const q = useQueueStore();
     q.applySnapshot(snapshot(task('t1', 'a', 'running'), task('t2', 'b', 'pending')));

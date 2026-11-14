@@ -32,6 +32,10 @@ export interface AddOptions {
   confirmDuplicate: (duplicates: string[]) => Promise<boolean>;
 }
 
+type LocalChange =
+  | { v: number; kind: 'replace'; id: string }
+  | { v: number; kind: 'patch'; id: string; fields: Partial<Manga> };
+
 function newestFirst(a: Manga, b: Manga): number {
   return b.updated_at - a.updated_at || b.add_date - a.add_date;
 }
@@ -64,34 +68,99 @@ export const useLibraryStore = defineStore('library', () => {
     return items.value.find((m) => m.manga_id === mangaId);
   }
 
+  // Local changes recorded while a load is in flight, so an older snapshot
+  // cannot undo them. `version` orders changes against load start points.
+  let version = 0;
+  let loadSeq = 0;
+  let inFlight = 0;
+  const changes: LocalChange[] = [];
+
+  function record(change: Omit<LocalChange, 'v'>): void {
+    if (inFlight > 0) changes.push({ ...change, v: ++version } as LocalChange);
+  }
+
   function upsert(manga: Manga): void {
+    record({ kind: 'replace', id: manga.manga_id });
     const i = items.value.findIndex((m) => m.manga_id === manga.manga_id);
     if (i === -1) items.value.push(manga);
     else items.value[i] = manga;
   }
 
   function removeLocal(mangaId: string): void {
+    record({ kind: 'replace', id: mangaId });
     items.value = items.value.filter((m) => m.manga_id !== mangaId);
   }
 
   function patch(mangaId: string, fields: Partial<Manga>): void {
+    record({ kind: 'patch', id: mangaId, fields });
     const m = byId(mangaId);
     if (m) Object.assign(m, fields);
   }
 
+  /**
+   * Merges a snapshot taken at `since` with local changes made after it:
+   * a replaced/removed id takes its current local state; a patched id takes
+   * the snapshot record with the patched fields on top.
+   */
+  function merge(snapshot: Manga[], since: number): Manga[] {
+    const replaced = new Set<string>();
+    const patches = new Map<string, Partial<Manga>>();
+    for (const c of changes) {
+      if (c.v <= since) continue;
+      if (c.kind === 'replace') {
+        replaced.add(c.id);
+        patches.delete(c.id);
+      } else if (!replaced.has(c.id)) {
+        patches.set(c.id, { ...patches.get(c.id), ...c.fields });
+      }
+    }
+    const local = new Map(items.value.map((m) => [m.manga_id, m]));
+    const out: Manga[] = [];
+    const seen = new Set<string>();
+    for (const m of snapshot) {
+      seen.add(m.manga_id);
+      if (replaced.has(m.manga_id)) {
+        const cur = local.get(m.manga_id);
+        if (cur) out.push(cur);
+      } else {
+        const p = patches.get(m.manga_id);
+        out.push(p ? { ...m, ...p } : m);
+      }
+    }
+    for (const id of replaced) {
+      const cur = local.get(id);
+      if (!seen.has(id) && cur) out.push(cur);
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------ actions
 
-  /** `GET /api/library`. Never throws; failures land in `loadError`. */
+  /**
+   * `GET /api/library`. Never throws; failures land in `loadError`.
+   * Overlapping calls are safe: only the latest-started load is applied,
+   * and socket changes made while it was in flight win over its snapshot.
+   */
   async function load(): Promise<void> {
+    const seq = ++loadSeq;
+    const since = version;
+    inFlight += 1;
     loading.value = true;
     try {
-      items.value = await api.getLibrary();
+      const snapshot = await api.getLibrary();
+      if (seq !== loadSeq) return;
+      items.value = merge(snapshot, since);
       loaded.value = true;
       loadError.value = null;
     } catch (err) {
+      if (seq !== loadSeq) return;
       loadError.value = toApiError(err);
     } finally {
-      loading.value = false;
+      inFlight -= 1;
+      if (inFlight === 0) {
+        loading.value = false;
+        changes.length = 0;
+      }
     }
   }
 

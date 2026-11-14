@@ -27,6 +27,8 @@ export const useQueueStore = defineStore('queue', () => {
   /** Waiting tasks, in execution order. */
   const pending = ref<TaskSummary[]>([]);
   const loaded = ref(false);
+  /** True while any `load()` is in flight. */
+  const loading = ref(false);
   const loadError = ref<ApiError | null>(null);
   /** Progress by manga id (only the running manga in practice). */
   const progress = ref<Record<string, DownloadProgress>>({});
@@ -54,30 +56,66 @@ export const useQueueStore = defineStore('queue', () => {
     );
   }
 
-  /** `GET /api/download/queue`. Never throws; failures land in `loadError`. */
+  // Ordering of socket events against loads (see `load`).
+  let version = 0;
+  let snapshotVersion = 0;
+  const progressVersion = new Map<string, number>();
+  let loadSeq = 0;
+  let inFlight = 0;
+
+  /**
+   * `GET /api/download/queue`. Never throws; failures land in `loadError`.
+   * Only the latest-started load is applied; a `queue_updated` received
+   * while it was in flight supersedes its snapshot, and progress received
+   * meanwhile is kept.
+   */
   async function load(): Promise<void> {
+    const seq = ++loadSeq;
+    const since = version;
+    inFlight += 1;
+    loading.value = true;
     try {
-      applySnapshot(await getQueue());
+      const s = await getQueue();
+      if (seq !== loadSeq) return;
+      if (snapshotVersion <= since) {
+        const fresh = [...progressVersion].filter(([, v]) => v > since).map(([id]) => id);
+        replace(s, fresh);
+      }
       loaded.value = true;
       loadError.value = null;
     } catch (err) {
+      if (seq !== loadSeq) return;
       loadError.value = toApiError(err);
+    } finally {
+      inFlight -= 1;
+      if (inFlight === 0) loading.value = false;
     }
+  }
+
+  function replace(s: QueueSnapshot, keepProgress: string[] = []): void {
+    active.value = s.active;
+    pending.value = s.pending;
+    const keep = new Set(keepProgress);
+    if (s.active?.mangaId) keep.add(s.active.mangaId);
+    for (const id of Object.keys(progress.value)) {
+      if (!keep.has(id)) delete progress.value[id];
+    }
+  }
+
+  function touchProgress(mangaId: string): void {
+    progressVersion.set(mangaId, ++version);
   }
 
   // ------------------------------------------------------------ socket
 
   /** `queue_updated`: the payload replaces the queue state. */
   function applySnapshot(s: QueueSnapshot): void {
-    active.value = s.active;
-    pending.value = s.pending;
-    const keep = s.active?.mangaId;
-    for (const id of Object.keys(progress.value)) {
-      if (id !== keep) delete progress.value[id];
-    }
+    snapshotVersion = ++version;
+    replace(s);
   }
 
   function applyStarted(e: DownloadStartedEvent): void {
+    touchProgress(e.manga_id);
     progress.value[e.manga_id] = {
       mangaId: e.manga_id,
       kind: e.kind,
@@ -88,6 +126,7 @@ export const useQueueStore = defineStore('queue', () => {
   }
 
   function applyProgress(e: DownloadProgressEvent): void {
+    touchProgress(e.manga_id);
     const kind =
       progress.value[e.manga_id]?.kind ??
       (active.value?.kind === 'redownload' ? 'redownload' : 'full-manga');
@@ -101,6 +140,7 @@ export const useQueueStore = defineStore('queue', () => {
   }
 
   function applyCompleted(e: DownloadCompletedEvent): void {
+    progressVersion.delete(e.manga_id);
     delete progress.value[e.manga_id];
     lastCompleted.value = e;
   }
@@ -113,6 +153,7 @@ export const useQueueStore = defineStore('queue', () => {
     active,
     pending,
     loaded,
+    loading,
     loadError,
     progress,
     lastCompleted,
