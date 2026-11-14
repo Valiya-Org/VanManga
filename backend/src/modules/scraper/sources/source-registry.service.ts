@@ -1,10 +1,5 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { UnknownSourceException } from '../../../common/http/api-exception';
 import {
   IMangaSource,
   MANGA_SOURCE_TOKEN,
@@ -35,9 +30,7 @@ export class SourceRegistryService implements OnModuleInit {
   get(name: string): IMangaSource {
     const source = this.byName.get(name);
     if (!source) {
-      throw new NotFoundException(
-        `Unknown manga source: '${name}'. Registered: ${this.list().join(', ')}`,
-      );
+      throw new UnknownSourceException(name, this.list());
     }
     return source;
   }

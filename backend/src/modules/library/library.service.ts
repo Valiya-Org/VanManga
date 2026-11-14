@@ -1,9 +1,6 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MangaNotFoundException } from '../../common/http/api-exception';
 import { join } from 'path';
 import type { AppConfig } from '../../config/configuration';
 import { FilesystemService } from '../filesystem/filesystem.service';
@@ -88,7 +85,7 @@ export class LibraryService {
 
   get(mangaId: string): Manga {
     const manga = this.repo.get(mangaId);
-    if (!manga) throw new NotFoundException(`Unknown manga: ${mangaId}`);
+    if (!manga) throw new MangaNotFoundException(mangaId);
     return manga;
   }
 
@@ -195,7 +192,7 @@ export class LibraryService {
    *  or queued" guard since LibraryModule does not import DownloadModule. */
   async deleteManga(mangaId: string): Promise<boolean> {
     const manga = this.repo.get(mangaId);
-    if (!manga) throw new NotFoundException(`Unknown manga: ${mangaId}`);
+    if (!manga) throw new MangaNotFoundException(mangaId);
 
     const folder = join(
       this.downloadRoot,
@@ -222,7 +219,7 @@ export class LibraryService {
    *  finisher to update last_epi / kavita_url / serialization / etc. */
   async patch(mangaId: string, patch: Partial<Manga>): Promise<Manga> {
     const next = await this.repo.update(mangaId, patch);
-    if (!next) throw new NotFoundException(`Unknown manga: ${mangaId}`);
+    if (!next) throw new MangaNotFoundException(mangaId);
     return next;
   }
 }

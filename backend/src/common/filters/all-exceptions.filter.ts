@@ -7,6 +7,28 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ApiException, errorCodeOf } from '../http/api-exception';
+
+/** Legacy routes keep the pre-P2 error structure until P4 deletes them. */
+const LEGACY_PREFIX = '/api/dogemanga/';
+
+const DEFAULT_ERRORS: Record<number, string> = {
+  400: 'bad-request',
+  401: 'unauthorized',
+  403: 'forbidden',
+  404: 'not-found',
+  409: 'conflict',
+  413: 'payload-too-large',
+  429: 'rate-limited',
+  500: 'internal-error',
+};
+
+interface CanonicalFailure {
+  code: number;
+  error: string;
+  message?: string;
+  data?: unknown;
+}
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -22,23 +44,65 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : exception instanceof Error
-          ? exception.message
-          : 'Unknown error';
+    const log = `[${request.method}] ${request.url} -> ${status}`;
+    if (status >= 500) {
+      this.logger.error(
+        log,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+    } else {
+      this.logger.warn(
+        `${log}: ${exception instanceof Error ? exception.message : String(exception)}`,
+      );
+    }
 
-    this.logger.error(
-      `[${request.method}] ${request.url} -> ${status}`,
-      exception instanceof Error ? exception.stack : String(exception),
-    );
+    const url = request.originalUrl ?? request.url;
+    if (url.startsWith(LEGACY_PREFIX)) {
+      response.status(status).json({
+        statusCode: status,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+        message:
+          exception instanceof HttpException
+            ? exception.getResponse()
+            : exception instanceof Error
+              ? exception.message
+              : 'Unknown error',
+      });
+      return;
+    }
 
-    response.status(status).json({
-      statusCode: status,
-      timestamp: new Date().toISOString(),
-      path: request.url,
-      message,
-    });
+    response.status(status).json(this.canonical(exception, status));
+  }
+
+  private canonical(exception: unknown, status: number): CanonicalFailure {
+    if (!(exception instanceof HttpException)) {
+      // Internal details stay in the log, not in the response.
+      return { code: status, error: 'internal-error' };
+    }
+
+    const body: CanonicalFailure = {
+      code: status,
+      error: errorCodeOf(exception) ?? DEFAULT_ERRORS[status] ?? `http-${status}`,
+    };
+
+    const raw = exception.getResponse();
+    const rawMessage =
+      typeof raw === 'string'
+        ? raw
+        : (raw as { message?: unknown }).message;
+
+    if (Array.isArray(rawMessage)) {
+      // ValidationPipe: a list of constraint messages.
+      if (status === 400 && !errorCodeOf(exception)) body.error = 'validation-failed';
+      body.message = rawMessage.map(String).join('; ');
+    } else if (typeof rawMessage === 'string' && rawMessage !== body.error) {
+      body.message = rawMessage;
+    }
+
+    if (exception instanceof ApiException && exception.data !== undefined) {
+      body.data = exception.data;
+    }
+    return body;
   }
 }
