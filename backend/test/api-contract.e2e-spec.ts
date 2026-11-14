@@ -45,7 +45,14 @@ describe('Canonical API contract (e2e)', () => {
     });
     configureApp(app);
     await app.init();
+
+    const { EventsGateway } = await import('../src/modules/events/events.gateway');
+    socketEmit = jest.spyOn(app.get(EventsGateway).server, 'emit');
   });
+
+  let socketEmit: jest.SpyInstance;
+  const emitted = (event: string) =>
+    socketEmit.mock.calls.filter(([name]) => name === event).map(([, payload]) => payload as Record<string, unknown>);
 
   afterAll(async () => {
     await app?.close();
@@ -131,6 +138,16 @@ describe('Canonical API contract (e2e)', () => {
     expect(record).toMatchObject({ completed: true, thumbnail: '/api/library/-e2e1/thumbnail' });
     expect(record.updated_at).toBeGreaterThanOrEqual(Math.floor(manga.add_date));
     expect(record.add_date).toBe(manga.add_date);
+
+    // --- socket broadcasts from the real module graph
+    expect(emitted('download_started')).toContainEqual({ manga_id: '-e2e1', kind: 'full-manga' });
+    expect(emitted('download_completed')).toContainEqual(
+      expect.objectContaining({ manga_id: '-e2e1', kind: 'full-manga', status: 'done', chapters_total: 0 }),
+    );
+    expect(emitted('downloading_info')).toContain('-e2e1'); // legacy still fires
+    const queueUpdates = emitted('queue_updated');
+    expect(queueUpdates.some((s) => (s.active as { mangaId?: string } | null)?.mangaId === '-e2e1')).toBe(true);
+    expect(queueUpdates.at(-1)).toEqual({ active: null, pending: [] });
 
     const thumb = await http().get('/api/library/-e2e1/thumbnail').expect(200);
     expect(thumb.headers['content-type']).toMatch(/image\/jpeg/);
