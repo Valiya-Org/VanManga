@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -49,11 +50,13 @@ describe('LibraryController (canonical /api/library)', () => {
   const taskQueue = { isMangaBusy: jest.fn(() => false) };
   const thumbnails = { getThumbnailPath: jest.fn() };
   const emitter = { emit: jest.fn() };
+  let adminToken = '';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [LibraryController],
       providers: [
+        { provide: ConfigService, useValue: { get: () => adminToken } },
         { provide: LibraryService, useValue: library },
         { provide: ThumbnailService, useValue: thumbnails },
         { provide: TaskQueueService, useValue: taskQueue },
@@ -73,6 +76,7 @@ describe('LibraryController (canonical /api/library)', () => {
     jest.clearAllMocks();
     taskQueue.isMangaBusy.mockReturnValue(false);
     library.has.mockReturnValue(true);
+    adminToken = '';
   });
 
   const http = () => request(app.getHttpServer());
@@ -190,6 +194,18 @@ describe('LibraryController (canonical /api/library)', () => {
       library.deleteManga.mockRejectedValueOnce(new MangaNotFoundException('zz'));
       const res = await http().delete('/api/library/zz').expect(404);
       expect(res.body.error).toBe('manga-not-found');
+    });
+
+    it('with ADMIN_TOKEN set, requires a matching X-Admin-Token', async () => {
+      adminToken = 's3cret';
+      const missing = await http().delete('/api/library/-abc').expect(401);
+      expect(missing.body).toMatchObject({ code: 401, error: 'admin-token-required' });
+      const wrong = await http().delete('/api/library/-abc').set('X-Admin-Token', 'nope').expect(401);
+      expect(wrong.body).toMatchObject({ code: 401, error: 'admin-token-invalid' });
+      expect(library.deleteManga).not.toHaveBeenCalled();
+
+      await http().delete('/api/library/-abc').set('X-Admin-Token', 's3cret').expect(200);
+      expect(library.deleteManga).toHaveBeenCalledWith('-abc');
     });
 
     it('folder removal failed → 500 delete-failed', async () => {

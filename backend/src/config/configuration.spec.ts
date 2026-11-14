@@ -33,3 +33,22 @@ describe('configuration: kavita.enabled', () => {
     expect(withKavita(env)).toBe(false);
   });
 });
+
+describe('configuration: security.adminToken', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('is empty (protection off) when ADMIN_TOKEN is unset or blank', () => {
+    delete process.env.ADMIN_TOKEN;
+    expect(configuration().security.adminToken).toBe('');
+    process.env.ADMIN_TOKEN = '   ';
+    expect(configuration().security.adminToken).toBe('');
+  });
+
+  it('reads ADMIN_TOKEN', () => {
+    process.env.ADMIN_TOKEN = 's3cret';
+    expect(configuration().security.adminToken).toBe('s3cret');
+  });
+});

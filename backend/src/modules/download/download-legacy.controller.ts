@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { AdminTokenGuard } from '../../common/security/admin-token.guard';
 import { LibraryService } from '../library/library.service';
 import { ScraperService } from '../scraper/scraper.service';
 import { DownloadService } from './download.service';
@@ -56,6 +57,7 @@ export class DownloadLegacyController {
   }
 
   @Get('rezip')
+  @UseGuards(AdminTokenGuard)
   rezip() {
     const handle = this.download.submitRezip();
     return { data: 'Re zip downloaded document begin', code: 200, taskId: handle.id };

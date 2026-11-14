@@ -1,5 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { AdminTokenGuard } from '../../common/security/admin-token.guard';
 import { ok } from '../../common/http/envelope';
 import { LibraryService } from '../library/library.service';
 import { assertScrapeOk, callScraper } from '../scraper/scrape-errors';
@@ -37,6 +38,8 @@ export class DownloadController {
   }
 
   @Post('library/rezip')
+  @UseGuards(AdminTokenGuard)
+  @ApiSecurity('admin-token')
   @HttpCode(200)
   @ApiTags('library')
   @ApiOperation({ summary: 'Queue a re-zip of every unzipped chapter on disk' })

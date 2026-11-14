@@ -8,9 +8,11 @@ import {
   Post,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { AdminTokenGuard } from '../../common/security/admin-token.guard';
 import type { Response } from 'express';
 import {
   MANGA_ADDED,
@@ -89,6 +91,7 @@ export class LibraryLegacyController {
   }
 
   @Delete('deletemanga')
+  @UseGuards(AdminTokenGuard)
   async delete(@Body('manga_id') mangaId: string) {
     if (!mangaId) throw new NotFoundException('manga_id missing');
     if (this.taskQueue.isMangaBusy(mangaId)) {

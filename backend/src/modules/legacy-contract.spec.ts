@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -63,11 +64,13 @@ describe('Legacy /api/dogemanga/* contract (unchanged in P2)', () => {
   };
   const scraper = { search: jest.fn(), getChapters: jest.fn() };
   const emitter = { emit: jest.fn() };
+  let adminToken = '';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [LibraryLegacyController, DownloadLegacyController, ScraperLegacyController],
       providers: [
+        { provide: ConfigService, useValue: { get: () => adminToken } },
         { provide: LibraryService, useValue: library },
         { provide: ThumbnailService, useValue: { getThumbnailPath: jest.fn() } },
         { provide: TaskQueueService, useValue: taskQueue },
@@ -88,9 +91,25 @@ describe('Legacy /api/dogemanga/* contract (unchanged in P2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     taskQueue.isMangaBusy.mockReturnValue(false);
+    adminToken = '';
   });
 
   const http = () => request(app.getHttpServer());
+
+  it('with ADMIN_TOKEN set, deletemanga and rezip also need X-Admin-Token (no bypass)', async () => {
+    adminToken = 's3cret';
+    const del = await http().delete('/api/dogemanga/deletemanga').send({ manga_id: '-abc' }).expect(401);
+    expect(del.body).toMatchObject({ statusCode: 401, path: '/api/dogemanga/deletemanga' });
+    await http().get('/api/dogemanga/rezip').expect(401);
+    expect(library.deleteManga).not.toHaveBeenCalled();
+    expect(download.submitRezip).not.toHaveBeenCalled();
+
+    await http()
+      .delete('/api/dogemanga/deletemanga')
+      .set('X-Admin-Token', 's3cret')
+      .send({ manga_id: '-abc' })
+      .expect(200, { data: true, code: 200 });
+  });
 
   it('POST lib returns raw records with HTTP 201', async () => {
     await http().post('/api/dogemanga/lib').expect(201, { data: [MANGA], code: 200 });

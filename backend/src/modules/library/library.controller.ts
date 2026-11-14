@@ -8,9 +8,11 @@ import {
   Post,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { AdminTokenGuard } from '../../common/security/admin-token.guard';
 import type { Response } from 'express';
 import {
   MANGA_ADDED,
@@ -112,6 +114,8 @@ export class LibraryController {
   }
 
   @Delete(':mangaId')
+  @UseGuards(AdminTokenGuard)
+  @ApiSecurity('admin-token')
   @ApiOperation({
     summary: 'Delete a manga and its download folder',
     description: 'Failures: 404 manga-not-found, 409 manga-busy, 500 delete-failed.',

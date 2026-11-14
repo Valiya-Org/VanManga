@@ -50,6 +50,10 @@ export interface AppConfig {
     url: string;
     enabled: boolean;
   };
+  security: {
+    /** ADMIN_TOKEN; '' disables protection of destructive routes. */
+    adminToken: string;
+  };
   python: {
     /** Python interpreter — default `python` on PATH. */
     executable: string;
@@ -111,6 +115,9 @@ export default (): AppConfig => {
     flaresolverr: {
       url: flaresolverrUrl,
       enabled: flaresolverrUrl.length > 0,
+    },
+    security: {
+      adminToken: (process.env.ADMIN_TOKEN ?? '').trim(),
     },
     python: {
       executable: process.env.PYTHON_EXECUTABLE ?? 'python',

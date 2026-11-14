@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AllExceptionsFilter } from '../../common/filters/all-exceptions.filter';
@@ -24,11 +25,13 @@ describe('DownloadController (canonical)', () => {
   };
   const library = { get: jest.fn(() => ({ manga_id: '-abc', source: 'dgmanga' })) };
   const scraper = { getChapters: jest.fn() };
+  let adminToken = '';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [DownloadController],
       providers: [
+        { provide: ConfigService, useValue: { get: () => adminToken } },
         { provide: DownloadService, useValue: download },
         { provide: LibraryService, useValue: library },
         { provide: ScraperService, useValue: scraper },
@@ -42,7 +45,10 @@ describe('DownloadController (canonical)', () => {
   });
 
   afterAll(() => app.close());
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    adminToken = '';
+  });
 
   const http = () => request(app.getHttpServer());
 
@@ -73,6 +79,14 @@ describe('DownloadController (canonical)', () => {
 
   it('POST /library/rezip', async () => {
     await http().post('/api/library/rezip').expect(200, { code: 200, data: { taskId: 't3' } });
+  });
+
+  it('POST /library/rezip requires X-Admin-Token when ADMIN_TOKEN is set', async () => {
+    adminToken = 's3cret';
+    const res = await http().post('/api/library/rezip').expect(401);
+    expect(res.body.error).toBe('admin-token-required');
+    expect(download.submitRezip).not.toHaveBeenCalled();
+    await http().post('/api/library/rezip').set('X-Admin-Token', 's3cret').expect(200);
   });
 
   it('GET /download/queue returns the snapshot', async () => {
