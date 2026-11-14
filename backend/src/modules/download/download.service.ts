@@ -11,6 +11,7 @@ import {
   ChapterPickDto,
 } from './dto/submit-download.dto';
 import {
+  QueueSnapshot,
   TaskHandle,
   TaskKind,
   TaskSummaryDto,
@@ -62,6 +63,10 @@ export class DownloadService {
 
   pending(): TaskSummaryDto[] {
     return this.queue.pendingSummaries();
+  }
+
+  snapshot(): QueueSnapshot {
+    return this.queue.snapshot();
   }
 
   isMangaBusy(mangaId: string): boolean {

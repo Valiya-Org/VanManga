@@ -2,6 +2,7 @@ import { HttpModule } from '@nestjs/axios';
 import { Global, Module } from '@nestjs/common';
 import { LibraryModule } from '../library/library.module';
 import { ScraperModule } from '../scraper/scraper.module';
+import { DownloadLegacyController } from './download-legacy.controller';
 import { DownloadController } from './download.controller';
 import { DownloadOrchestratorService } from './download-orchestrator.service';
 import { DownloadService } from './download.service';
@@ -18,7 +19,7 @@ import { TaskQueueService } from './queue/task-queue.service';
     LibraryModule,
     ScraperModule,
   ],
-  controllers: [DownloadController],
+  controllers: [DownloadController, DownloadLegacyController],
   providers: [
     TaskQueueService,
     ImageDownloaderService,

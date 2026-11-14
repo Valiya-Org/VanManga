@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
 import { createValidationPipe } from '../common/pipes/validation.pipe';
-import { DownloadController } from './download/download.controller';
+import { DownloadLegacyController } from './download/download-legacy.controller';
 import { DownloadService } from './download/download.service';
 import { TaskQueueService } from './download/queue/task-queue.service';
 import { ThumbnailService } from './filesystem/thumbnail.service';
@@ -66,7 +66,7 @@ describe('Legacy /api/dogemanga/* contract (unchanged in P2)', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [LibraryLegacyController, DownloadController, ScraperLegacyController],
+      controllers: [LibraryLegacyController, DownloadLegacyController, ScraperLegacyController],
       providers: [
         { provide: LibraryService, useValue: library },
         { provide: ThumbnailService, useValue: { getThumbnailPath: jest.fn() } },

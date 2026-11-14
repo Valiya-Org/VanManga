@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
+  QueueSnapshot,
   TaskHandle,
   TaskKind,
   TaskPayload,
@@ -66,6 +67,10 @@ export class TaskQueueService {
 
   activeSummary(): TaskSummaryDto | null {
     return this.active ? this.summarise(this.active) : null;
+  }
+
+  snapshot(): QueueSnapshot {
+    return { active: this.activeSummary(), pending: this.pendingSummaries() };
   }
 
   private async drain(): Promise<void> {

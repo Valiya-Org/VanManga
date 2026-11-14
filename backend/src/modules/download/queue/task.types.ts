@@ -40,6 +40,12 @@ export interface TaskHandle {
   error?: string;
 }
 
+/** The whole queue as the canonical API and `queue_updated` expose it. */
+export interface QueueSnapshot {
+  active: TaskSummaryDto | null;
+  pending: TaskSummaryDto[];
+}
+
 /** Public-facing snapshot of a task — what controllers expose. */
 export interface TaskSummaryDto {
   id: string;
