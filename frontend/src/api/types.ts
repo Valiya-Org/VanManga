@@ -57,11 +57,19 @@ export const DEFAULT_ERROR_CODES = [
 
 /** Client-side codes, never sent by the server. */
 export const CLIENT_ERROR_CODES = [
-  /** No response at all (offline, backend down, CORS, timeout). */
+  /** No response at all (offline, backend down, timeout), or a non-envelope
+   *  502/503/504 from a proxy with no backend behind it. */
   'network-error',
   /** A response arrived but was not a contract envelope (e.g. proxy HTML). */
   'invalid-response',
 ] as const;
+
+/**
+ * Client code for a request aborted by the caller (AbortSignal). Not a
+ * failure the user needs to hear about: check `isCanceled(err)` first and
+ * show nothing; `errorMessage()` returns `''` for it.
+ */
+export const CANCELED_ERROR_CODE = 'canceled';
 
 /** Any `error` string an {@link ApiError} may carry. Unknown server strings
  *  are kept verbatim, hence the `string` escape hatch. */
@@ -69,6 +77,7 @@ export type AnyErrorCode =
   | ApiErrorCode
   | (typeof DEFAULT_ERROR_CODES)[number]
   | (typeof CLIENT_ERROR_CODES)[number]
+  | typeof CANCELED_ERROR_CODE
   | (string & {});
 
 export interface ApiSuccess<T> {

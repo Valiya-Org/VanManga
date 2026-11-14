@@ -24,7 +24,17 @@ describe('errorMessage', () => {
 
   it('falls back by HTTP status class for an unknown code', () => {
     expect(errorMessage(new ApiError(418, 'http-418'))).toBe(ERROR_MESSAGES['bad-request']);
-    expect(errorMessage(new ApiError(503, 'http-503'))).toBe(ERROR_MESSAGES['internal-error']);
+    expect(errorMessage(new ApiError(500, 'http-500'))).toBe(ERROR_MESSAGES['internal-error']);
+  });
+
+  it('reads an unknown 502/503/504 as a connectivity problem', () => {
+    for (const s of [502, 503, 504]) {
+      expect(errorMessage(new ApiError(s, `http-${s}`))).toBe(ERROR_MESSAGES['network-error']);
+    }
+  });
+
+  it('gives no user message for a cancelled request', () => {
+    expect(errorMessage(new ApiError(0, 'canceled'))).toBe('');
   });
 
   it('uses the generic fallback for anything else', () => {

@@ -1,10 +1,11 @@
 import axios, {
   isAxiosError,
+  isCancel,
   type AxiosInstance,
   type AxiosRequestConfig,
 } from 'axios';
 import { ApiError } from './errors';
-import type { ApiFailure, ApiSuccess } from './types';
+import { CANCELED_ERROR_CODE, type ApiFailure, type ApiSuccess } from './types';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -14,12 +15,23 @@ declare module 'axios' {
 }
 
 /**
+ * Per-request timeout. Generous because search and chapter lists scrape the
+ * source live (possibly through a Cloudflare solver); a hung backend then
+ * yields `network-error` instead of a request that never settles.
+ */
+export const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Non-envelope statuses that mean "no backend reachable" (proxy errors). */
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
+
+/**
  * The single axios instance. Same-origin `/api` (contract §1.1); in dev the
  * Vite proxy forwards it to the backend. Same-origin, so no
  * `withCredentials`.
  */
 export const http: AxiosInstance = axios.create({
   baseURL: '/api',
+  timeout: REQUEST_TIMEOUT_MS,
 });
 
 export const ADMIN_TOKEN_HEADER = 'X-Admin-Token';
@@ -63,12 +75,18 @@ function isFailure(body: unknown): body is ApiFailure {
 /** Converts anything axios throws into an {@link ApiError}. */
 export function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err;
+  if (isCancel(err)) {
+    return new ApiError(0, CANCELED_ERROR_CODE, (err as Error).message || 'canceled');
+  }
   if (isAxiosError(err)) {
     const res = err.response;
     if (!res) return new ApiError(0, 'network-error', err.message);
     if (isFailure(res.data)) {
       const body = res.data;
       return new ApiError(res.status, body.error, body.message, body.data);
+    }
+    if (GATEWAY_STATUSES.has(res.status)) {
+      return new ApiError(res.status, 'network-error', err.message);
     }
     return new ApiError(res.status, `http-${res.status}`, err.message);
   }

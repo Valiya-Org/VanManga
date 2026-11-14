@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { AxiosHeaders } from 'axios';
-import { ApiError, isApiError } from './errors';
-import { http, request, setAdminTokenProvider } from './http';
+import { AxiosError, AxiosHeaders } from 'axios';
+import { ApiError, isApiError, isCanceled } from './errors';
+import { http, request, setAdminTokenProvider, toApiError } from './http';
+import { ERROR_MESSAGES, errorMessage } from '@/errors/messages';
 import * as api from './endpoints';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
 
@@ -79,11 +80,54 @@ describe('request()', () => {
   });
 
   it('maps a non-envelope error body to http-<status>', async () => {
-    server.reply(502, '<html>Bad Gateway</html>');
+    server.reply(500, '<html>Oops</html>');
     await expect(request({ url: 'x' })).rejects.toMatchObject({
-      status: 502,
-      error: 'http-502',
+      status: 500,
+      error: 'http-500',
     });
+  });
+
+  it.each([502, 503, 504])(
+    'maps a non-envelope %i (proxy, no backend) to network-error keeping the status',
+    async (status) => {
+      server.reply(status, '<html>Bad Gateway</html>');
+      const err = await request({ url: 'x' }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ status, error: 'network-error' });
+      expect(errorMessage(err)).toBe(ERROR_MESSAGES['network-error']);
+    },
+  );
+
+  it('maps a cancelled request to a distinct, non-user-facing canceled error', async () => {
+    const controller = new AbortController();
+    const held = server.replyDeferred();
+    const p = request({ url: 'x', signal: controller.signal }).catch((e: unknown) => e);
+    await held.received;
+    controller.abort();
+    const err = await p;
+    expect(err).toMatchObject({ status: 0, error: 'canceled' });
+    expect(isCanceled(err)).toBe(true);
+    expect((err as ApiError).isCanceled).toBe(true);
+    expect(errorMessage(err)).toBe('');
+  });
+
+  it('a request aborted before it is sent is canceled too', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(request({ url: 'x', signal: controller.signal })).rejects.toMatchObject({
+      error: 'canceled',
+    });
+  });
+
+  it('isCanceled is false for other errors and non-errors', () => {
+    expect(isCanceled(new ApiError(0, 'network-error'))).toBe(false);
+    expect(isCanceled(new Error('x'))).toBe(false);
+    expect(isCanceled(undefined)).toBe(false);
+  });
+
+  it('has a request timeout, and a timeout reads as network-error', () => {
+    expect(http.defaults.timeout).toBeGreaterThan(0);
+    const timeout = new AxiosError('timeout of 1ms exceeded', AxiosError.ECONNABORTED);
+    expect(toApiError(timeout)).toMatchObject({ status: 0, error: 'network-error' });
   });
 
   it('maps a 2xx body that is not an envelope to invalid-response', async () => {

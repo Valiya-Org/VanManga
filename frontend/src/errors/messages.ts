@@ -61,11 +61,16 @@ export const ERROR_MESSAGES: Record<KnownCode, string> = {
 
 export const FALLBACK_MESSAGE = '操作失败，请稍后重试';
 
-/** User-facing Chinese text for any thrown value. */
+/**
+ * User-facing Chinese text for any thrown value. Returns `''` for a
+ * cancelled request (`isCanceled(err)`), which must not be shown at all.
+ */
 export function errorMessage(err: unknown): string {
   if (!isApiError(err)) return FALLBACK_MESSAGE;
+  if (err.isCanceled) return '';
   const known = (ERROR_MESSAGES as Record<string, string | undefined>)[err.error];
   if (known) return known;
+  if (err.status >= 502 && err.status <= 504) return ERROR_MESSAGES['network-error'];
   if (err.status >= 500) return ERROR_MESSAGES['internal-error'];
   if (err.status >= 400) return ERROR_MESSAGES['bad-request'];
   return FALLBACK_MESSAGE;
