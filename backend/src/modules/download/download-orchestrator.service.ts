@@ -17,6 +17,7 @@ import {
   MangaMetadataDto,
 } from '../scraper/dto';
 import { ScraperService } from '../scraper/scraper.service';
+import { reformatChapterTitle } from './chapter-title';
 import { ImageDownloaderService } from './image-downloader.service';
 import { TaskQueueService } from './queue/task-queue.service';
 import {
@@ -39,6 +40,14 @@ import {
 export class DownloadOrchestratorService implements OnModuleInit {
   private readonly logger = new Logger(DownloadOrchestratorService.name);
   private readonly chapterConcurrency: number;
+  /** A chapter with this many failed images is abandoned rather than
+   *  zipped — same threshold as modules/DGmanga.py:download_img. */
+  private readonly maxFailedImagesPerChapter = 10;
+  /** Retries for a chapter page that answers 429, and the base wait between
+   *  them (attempt N waits N x base + jitter). Mirrors Error_dict in main.py:
+   *  g_wait_time=40s, g_error_count capped at 5. */
+  private readonly maxChapterRateLimitRetries = 5;
+  private readonly chapterRateLimitBaseMs = 40_000;
 
   constructor(
     private readonly queue: TaskQueueService,
@@ -96,10 +105,24 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const start = manga.last_epi <= 1 ? 1 : manga.last_epi + 1;
     const wanted = list.chapters.filter((c) => c.index >= start);
 
+    let failedCount = 0;
     if (wanted.length === 0) {
       this.logger.log(`${manga.manga_id}: no new chapters after filter`);
     } else {
-      await this.processChapters(manga, sourceName, wanted);
+      failedCount = await this.processChapters(manga, sourceName, wanted);
+    }
+
+    // Nothing at all came down (source blocked, layout changed, ...). Leave
+    // the record untouched so the next scan retries it: marking it completed
+    // would also copy `serialization` into download_switch, and a finished
+    // series would then never be scanned again.
+    if (wanted.length > 0 && failedCount === wanted.length) {
+      this.logger.error(
+        `=== DOWNLOAD FAILED: ${manga.manga_name} (${manga.manga_id}) — ` +
+          `all ${wanted.length} chapter(s) failed ===`,
+      );
+      this.events.emitComplete({ manga_id: manga.manga_id });
+      return;
     }
 
     // mark completion + carry-forward serialization on first finish
@@ -142,6 +165,12 @@ export class DownloadOrchestratorService implements OnModuleInit {
     this.logger.log(
       `=== REDOWNLOAD DONE: ${manga.manga_name} (${manga.manga_id}) ===`,
     );
+
+    // main.py:download_chapter_task also triggered a Kavita folder scan.
+    this.eventEmitter.emit(DOWNLOAD_COMPLETED, {
+      mangaId: manga.manga_id,
+      mangaName: manga.manga_name,
+    } satisfies DownloadCompletedEvent);
   }
 
   // -------------------------------------------- REZIP
@@ -161,7 +190,7 @@ export class DownloadOrchestratorService implements OnModuleInit {
     sourceName: string,
     chapters: ChapterDto[],
     options: { updateLastEpi?: boolean } = {},
-  ): Promise<void> {
+  ): Promise<number> {
     const updateLastEpi = options.updateLastEpi ?? true;
     const tree = await this.fsService.ensureMangaTree(
       manga.manga_name,
@@ -205,6 +234,7 @@ export class DownloadOrchestratorService implements OnModuleInit {
         `${manga.manga_id}: ${failedChapters.length} chapter(s) failed: ${failedChapters.join(', ')}`,
       );
     }
+    return failedChapters.length;
   }
 
   private async processOneChapter(
@@ -214,15 +244,14 @@ export class DownloadOrchestratorService implements OnModuleInit {
     innerDir: string,
     updateLastEpi: boolean,
   ): Promise<void> {
-    const safeTitle = this.sanitiseTitle(chapter.title);
+    const safeTitle = this.sanitiseTitle(reformatChapterTitle(chapter.title));
     const chapterDir = this.fsService.chapterDir(innerDir, safeTitle);
 
-    const images = await this.scraper.getChapterImages(sourceName, chapter.url);
-    if (images.errorCode) {
-      throw new Error(
-        `chapter scrape returned errorCode=${images.errorCode}`,
-      );
-    }
+    const images = await this.scrapeChapterImages(
+      sourceName,
+      chapter.url,
+      safeTitle,
+    );
 
     const jobs = images.imageUrls.map((url, i) => ({
       url,
@@ -237,6 +266,15 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const result = await this.imageDownloader.downloadChapter(chapterDir, jobs, {
       label: `Chapter '${safeTitle}'`,
     });
+    if (result.failed.length >= this.maxFailedImagesPerChapter) {
+      // Drop the partial folder so a later rezip cannot package it as if it
+      // were a complete chapter.
+      await this.fsService.removeDir(chapterDir);
+      throw new Error(
+        `${result.failed.length}/${jobs.length} images failed ` +
+          `(first: ${result.failed[0].reason})`,
+      );
+    }
     if (result.failed.length > 0) {
       const sample = result.failed[0];
       this.logger.warn(
@@ -249,8 +287,8 @@ export class DownloadOrchestratorService implements OnModuleInit {
       );
     }
 
-    // Zip on success only (matches modules/DGmanga.py:download_img which
-    // zips after the inner retry loop)
+    // Below the failure threshold the chapter is zipped as-is, like
+    // modules/DGmanga.py:download_img after its retry pass.
     await this.archive.zipChapter(chapterDir);
 
     this.logger.log(`Chapter '${safeTitle}': done ✓`);
@@ -274,6 +312,39 @@ export class DownloadOrchestratorService implements OnModuleInit {
           last_epi: chapter.index,
         });
       }
+    }
+  }
+
+  /** Fetch a chapter's image list, waiting out 429s. The legacy scraper
+   *  slept and retried on a rate-limited chapter page; without this the
+   *  chapter is dropped, and since last_epi only tracks the highest
+   *  downloaded index, a dropped chapter is never picked up again. */
+  private async scrapeChapterImages(
+    sourceName: string,
+    chapterUrl: string,
+    label: string,
+  ) {
+    for (let attempt = 0; ; attempt += 1) {
+      const images = await this.scraper.getChapterImages(sourceName, chapterUrl);
+      if (!images.errorCode) return images;
+
+      if (
+        images.errorCode !== 429 ||
+        attempt >= this.maxChapterRateLimitRetries
+      ) {
+        throw new Error(
+          `chapter scrape returned errorCode=${images.errorCode}`,
+        );
+      }
+
+      const wait =
+        this.chapterRateLimitBaseMs * (attempt + 1) + Math.random() * 10_000;
+      this.logger.warn(
+        `Chapter '${label}': page rate limited (429); retrying in ` +
+          `${Math.round(wait / 1000)}s ` +
+          `(${attempt + 1}/${this.maxChapterRateLimitRetries})`,
+      );
+      await this.sleep(wait);
     }
   }
 
@@ -332,14 +403,19 @@ export class DownloadOrchestratorService implements OnModuleInit {
     });
   }
 
-  /** Replaces utils/chapter_title_reformat.py call site — the Python
-   *  scraper already normalises titles before they reach NestJS, but
-   *  we still strip filesystem-hostile characters defensively. */
+  /** Make an already-reformatted chapter title safe as a single path
+   *  segment. The legacy app used the title verbatim, so on Linux (the
+   *  deployment target) only the path separator is replaced, keeping names
+   *  identical to existing downloads. Windows — development only — also
+   *  rejects a handful of other characters. */
   private sanitiseTitle(title: string): string {
-    return title
-      .replace(/[\\/:*?"<>|]/g, '_')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const hostile = process.platform === 'win32' ? /[\\/:*?"<>|]/g : /\//g;
+    return title.replace(hostile, '_').trim();
+  }
+
+  /** Overridable in tests so backoff waits don't take real time. */
+  protected sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private padPage(n: number): string {

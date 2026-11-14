@@ -1,0 +1,142 @@
+[
+  {
+    "input": "电锯人s1s0s10086",
+    "expected": "电锯人s$1s$0s$10086"
+  },
+  {
+    "input": "电(锯)人S100086",
+    "expected": "电(锯)人S$100086"
+  },
+  {
+    "input": "电(-)锯人s010010",
+    "expected": "电(-)锯人s$010010"
+  },
+  {
+    "input": "电锯人s1",
+    "expected": "电锯人s$1"
+  },
+  {
+    "input": "电锯人s0",
+    "expected": "电锯人s$0"
+  },
+  {
+    "input": "电锯人s080018",
+    "expected": "电锯人s$080018"
+  },
+  {
+    "input": "-电(s11)锯s0人S2",
+    "expected": "-电(s$11)锯s$0人S$2"
+  },
+  {
+    "input": "电s11锯s0人S2",
+    "expected": "电s$11锯s$0人S$2"
+  },
+  {
+    "input": "电锯人第100话sAAA",
+    "expected": "电锯人第100话sAAA"
+  },
+  {
+    "input": "第68-69话",
+    "expected": "第68-第69话"
+  },
+  {
+    "input": "2022-2023残夏问候",
+    "expected": "第2022-第2023残夏问候"
+  },
+  {
+    "input": "先西日记v2",
+    "expected": "先西日记v$2"
+  },
+  {
+    "input": "先西日记V2",
+    "expected": "先西日记V$2"
+  },
+  {
+    "input": "12-13",
+    "expected": "第12-第13"
+  },
+  {
+    "input": "02-僵尸05-21",
+    "expected": "第02-僵尸第05-第21"
+  },
+  {
+    "input": "第48.5话",
+    "expected": "第48.5话"
+  },
+  {
+    "input": "第5话",
+    "expected": "第5话"
+  },
+  {
+    "input": "第1话",
+    "expected": "第1话"
+  },
+  {
+    "input": "番外(1)",
+    "expected": "番外（1）"
+  },
+  {
+    "input": "第12-13话(修)",
+    "expected": "第12-第13话（修）"
+  },
+  {
+    "input": "Vol.3 第20话",
+    "expected": "Vol.3 第20话"
+  },
+  {
+    "input": "第3卷",
+    "expected": "第3卷"
+  },
+  {
+    "input": "特别篇-夏日",
+    "expected": "特别篇$夏日"
+  },
+  {
+    "input": "SP1",
+    "expected": "SP1"
+  },
+  {
+    "input": "第10话 v2",
+    "expected": "第10话 v$2"
+  },
+  {
+    "input": "1.5",
+    "expected": "1.5"
+  },
+  {
+    "input": "第7话-后篇",
+    "expected": "第7话$后篇"
+  },
+  {
+    "input": "ss12",
+    "expected": "ss$12"
+  },
+  {
+    "input": "vv3",
+    "expected": "vv$3"
+  },
+  {
+    "input": "第100话",
+    "expected": "第100话"
+  },
+  {
+    "input": "第1-2话 v3",
+    "expected": "第1-第2话 v3"
+  },
+  {
+    "input": "1 2",
+    "expected": "第1 第2"
+  },
+  {
+    "input": "第1話 第2話",
+    "expected": "第第1話 第第2話"
+  },
+  {
+    "input": "a-b(c)",
+    "expected": "a$b（c）"
+  },
+  {
+    "input": "",
+    "expected": ""
+  }
+]
