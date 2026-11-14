@@ -60,8 +60,11 @@ Set `MANGA_BASE_URL` / `MANGA_BASE_WEBSOCKET_URL` to the public address
 (only the legacy frontend reads them, via `/js/config.js`). New library
 records store relative cover URLs and old absolute ones are normalised on
 read, so the domain is not baked into the library. Set `ADMIN_TOKEN` to
-require an `X-Admin-Token` header for deleting manga and re-zipping. All
-variables are listed in `.env.example`.
+require an `X-Admin-Token` header for deleting manga and re-zipping. The
+legacy routes (`DELETE /api/dogemanga/deletemanga`, `GET /api/dogemanga/rezip`)
+are guarded too, and the pre-redesign web UI never sends the header, so with
+`ADMIN_TOKEN` set that UI can no longer delete or re-zip. All variables are
+listed in `.env.example`.
 
 The HTTP and Socket.IO contract for clients is `docs/api-contract.md`
 (Swagger at `/api/docs`).
