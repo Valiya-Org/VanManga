@@ -294,6 +294,23 @@ describe('TaskQueueService', () => {
       expect(make().snapshot()).toEqual({ active: null, pending: [] });
     });
 
+    it('moves a corrupt queue.json aside as queue.json.corrupt-<unix-seconds>', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1_800_000_000_500);
+      try {
+        writeFileSync(file, '{ not json');
+        const q = make();
+        const kept = `${file}.corrupt-1800000000`;
+        expect(existsSync(kept)).toBe(true);
+        expect(readFileSync(kept, 'utf8')).toBe('{ not json');
+        // The next write must not clobber the evidence.
+        q.enqueue({ kind: TaskKind.FULL_MANGA, mangaId: 'a' });
+        await q.flushPersistence();
+        expect(readFileSync(kept, 'utf8')).toBe('{ not json');
+      } finally {
+        jest.restoreAllMocks();
+      }
+    });
+
     it('skips malformed entries', () => {
       writeFileSync(
         file,

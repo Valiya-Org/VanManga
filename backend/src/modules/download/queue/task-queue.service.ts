@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
-import { mkdirSync, readFileSync } from 'fs';
+import { mkdirSync, readFileSync, renameSync } from 'fs';
 import { promises as fs } from 'fs';
 import { dirname } from 'path';
 import { QUEUE_CHANGED } from '../../../common/events/app.events';
@@ -211,9 +211,10 @@ export class TaskQueueService implements OnModuleInit {
     await fs.rename(tmp, this.file);
   }
 
-  /** A missing file is an empty queue. A corrupt one is logged and
-   *  ignored: unlike the library, losing the queue only loses work the
-   *  next boot scan re-queues anyway. */
+  /** A missing file is an empty queue. A corrupt one is renamed to
+   *  queue.json.corrupt-<unix-seconds> (kept as evidence) and ignored:
+   *  unlike the library, losing the queue only loses work the next boot
+   *  scan re-queues anyway. */
   private readPersisted(): TaskHandle[] {
     let raw: string;
     try {
@@ -231,7 +232,17 @@ export class TaskQueueService implements OnModuleInit {
     try {
       parsed = JSON.parse(raw) as Partial<PersistedQueue>;
     } catch (err) {
-      this.logger.warn(`${this.file} is not valid JSON (${(err as Error).message}); starting with an empty queue`);
+      // Writes are not fsynced, so a power loss can leave a zero-length
+      // file; that lands here too, and the boot scan re-queues the work.
+      const kept = `${this.file}.corrupt-${Math.floor(Date.now() / 1000)}`;
+      try {
+        renameSync(this.file, kept);
+      } catch (renameErr) {
+        this.logger.error(`Could not move ${this.file} aside: ${(renameErr as Error).message}`);
+      }
+      this.logger.warn(
+        `${this.file} is not valid JSON (${(err as Error).message}); kept as ${kept}, starting with an empty queue`,
+      );
       return [];
     }
 
