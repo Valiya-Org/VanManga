@@ -5,6 +5,8 @@ import { fakeServer, type FakeServer } from '@/test/fake-server';
 import { makeManga } from '@/test/fixtures';
 import { useLibraryStore } from '@/stores/library';
 import { useQueueStore } from '@/stores/queue';
+import { useConfigStore } from '@/stores/config';
+import { useRealtimeStore } from '@/stores/realtime';
 import { bindSocketEvents, type SocketLike } from './dispatcher';
 
 /** Minimal in-memory emitter standing in for the socket.io client. */
@@ -123,6 +125,47 @@ describe('socket dispatcher', () => {
     expect(urls).toEqual(['library', 'download/queue']);
   });
 
+  it('connect / disconnect / connect_error → realtime connection state', () => {
+    const rt = useRealtimeStore();
+    expect(rt.connected).toBe(false);
+    expect(rt.offline).toBe(false);
+
+    socket.emit('connect_error', new Error('xhr poll error'));
+    expect(rt.connected).toBe(false);
+    expect(rt.realtimeError).toBe('xhr poll error');
+    expect(rt.offline).toBe(true);
+
+    server.reply(200, { code: 200, data: [] });
+    socket.emit('connect');
+    expect(rt.connected).toBe(true);
+    expect(rt.realtimeError).toBeNull();
+    expect(rt.offline).toBe(false);
+
+    socket.emit('disconnect', 'transport close');
+    expect(rt.connected).toBe(false);
+    expect(rt.offline).toBe(true);
+  });
+
+  it('connect reloads the config only when it failed to load', async () => {
+    const config = useConfigStore();
+    server.networkError();
+    await config.load();
+    expect(config.error).not.toBeNull();
+
+    server.reply(200, {
+      code: 200,
+      data: { kavitaEnabled: false, kavitaExposeUrl: null, adminRequired: true },
+    });
+    socket.emit('connect');
+    await vi.waitFor(() => expect(config.adminRequired).toBe(true));
+    expect(config.error).toBeNull();
+
+    const before = server.requests.filter((r) => r.url === 'config').length;
+    socket.emit('connect');
+    await vi.waitFor(() => expect(useQueueStore().loading).toBe(false));
+    expect(server.requests.filter((r) => r.url === 'config')).toHaveLength(before);
+  });
+
   it('ignores legacy event names', () => {
     socket.emit('response', { manga_id: 'a', last_epi: 99, last_epi_name: 'x' });
     socket.emit('complete_info', { manga_id: 'a' });
@@ -130,7 +173,7 @@ describe('socket dispatcher', () => {
   });
 
   it('unbind removes every listener', () => {
-    expect(socket.count()).toBe(8);
+    expect(socket.count()).toBe(10);
     unbind();
     expect(socket.count()).toBe(0);
   });

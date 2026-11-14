@@ -18,6 +18,7 @@ import { http } from '@/api/http';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
 import { useConfigStore } from '@/stores/config';
 import { useQueueStore } from '@/stores/queue';
+import { useLibraryStore } from '@/stores/library';
 import App from './App.vue';
 import { routes } from './router';
 
@@ -63,6 +64,16 @@ describe('App shell', () => {
       pending: [{ id: 't', kind: 'full-manga', mangaId: 'm', status: 'pending', enqueuedAt: 1 }],
     });
     expect(useQueueStore().count).toBe(1);
+  });
+
+  it('loads library and queue at startup without waiting for the socket', async () => {
+    server.reply(200, { code: 200, data: [] });
+    await mountApp();
+    const urls = server.requests.map((r) => r.url);
+    expect(urls).toEqual(expect.arrayContaining(['config', 'library', 'download/queue']));
+    expect(listeners.has('connect')).toBe(true);
+    expect(useLibraryStore().loaded).toBe(true);
+    expect(useQueueStore().loaded).toBe(true);
   });
 
   it('unbinds and disconnects on unmount', async () => {
