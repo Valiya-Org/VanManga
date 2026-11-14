@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build && vue-tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -14,13 +14,11 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
+    "@nuxt/ui": "^4.12.0",
     "axios": "^1.7.9",
-    "element-plus": "^2.9.1",
-    "overlayscrollbars": "^2.10.1",
-    "overlayscrollbars-vue": "^0.5.9",
     "pinia": "^2.3.0",
     "socket.io-client": "^4.8.1",
-    "vant": "^4.9.15",
+    "tailwindcss": "^4.3.5",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

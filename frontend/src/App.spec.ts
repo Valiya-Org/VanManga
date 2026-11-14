@@ -1,47 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
-import { createPinia, setActivePinia } from 'pinia';
-
-vi.mock('@/api/kavita', () => ({
-  kavitaStatus: vi.fn(() => Promise.resolve({ code: 200, data: null })),
-}));
-vi.mock('@/utils/ui', () => ({
-  showLoading: vi.fn(() => ({ close: vi.fn() })),
-  messageError: vi.fn(),
-}));
-
-import { kavitaStatus } from '@/api/kavita';
+import { describe, it, expect } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
+import { createRouter, createMemoryHistory } from 'vue-router';
+import { createPinia } from 'pinia';
 import App from './App.vue';
+import { routes } from './router';
 
-beforeEach(() => {
-  setActivePinia(createPinia());
-  localStorage.clear();
-  vi.clearAllMocks();
-  (window as unknown as { MANGA_BASE_URL?: string }).MANGA_BASE_URL = 'http://x';
-});
+describe('App shell', () => {
+  it('renders the routed view inside the Nuxt UI app wrapper', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    await router.push('/settings');
+    await router.isReady();
 
-describe('App init', () => {
-  it('renders router-view outlet', () => {
     const wrapper = mount(App, {
-      global: { stubs: { 'router-view': true } },
+      global: { plugins: [createPinia(), router] },
     });
-    expect(wrapper.find('#app').exists()).toBe(true);
-  });
+    await flushPromises();
 
-  it('checks server status when no cached serverStatus', async () => {
-    mount(App, { global: { stubs: { 'router-view': true } } });
-    await Promise.resolve();
-    expect(kavitaStatus).toHaveBeenCalledTimes(1);
-  });
-
-  it('skips server check when fresh cache exists', async () => {
-    localStorage.setItem('serverStatus', 'true');
-    localStorage.setItem(
-      'serverStatusLastCheckTime',
-      JSON.stringify(Date.now()),
-    );
-    mount(App, { global: { stubs: { 'router-view': true } } });
-    await Promise.resolve();
-    expect(kavitaStatus).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(true);
   });
 });
