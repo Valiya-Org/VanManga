@@ -17,3 +17,6 @@ downloaded
 
 # brainstorming visual companion sessions
 /.superpowers/
+
+# macOS Finder metadata
+.DS_Store
