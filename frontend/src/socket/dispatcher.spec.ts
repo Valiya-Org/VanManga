@@ -12,7 +12,11 @@ import { bindSocketEvents, type SocketLike } from './dispatcher';
 /** Minimal in-memory emitter standing in for the socket.io client. */
 function fakeSocket() {
   const listeners = new Map<string, Set<(...a: unknown[]) => void>>();
-  const socket: SocketLike & { emit(event: string, ...args: unknown[]): void; count(): number } = {
+  const socket: SocketLike & {
+    emit(event: string, ...args: unknown[]): void;
+    count(): number;
+    events(): string[];
+  } = {
     on(event, handler) {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(handler as (...a: unknown[]) => void);
@@ -24,6 +28,7 @@ function fakeSocket() {
       listeners.get(event)?.forEach((h) => h(...args));
     },
     count: () => [...listeners.values()].reduce((n, s) => n + s.size, 0),
+    events: () => [...listeners].filter(([, s]) => s.size > 0).map(([e]) => e),
   };
   return socket;
 }
@@ -166,10 +171,25 @@ describe('socket dispatcher', () => {
     expect(server.requests.filter((r) => r.url === 'config')).toHaveLength(before);
   });
 
-  it('ignores legacy event names', () => {
-    socket.emit('response', { manga_id: 'a', last_epi: 99, last_epi_name: 'x' });
-    socket.emit('complete_info', { manga_id: 'a' });
-    expect(useLibraryStore().byId('a')!.last_epi).toBe(1);
+  it('registers no handler for legacy event names, only the canonical ones', () => {
+    const registered = socket.events();
+    for (const legacy of ['downloading_info', 'response', 'complete_info']) {
+      expect(registered).not.toContain(legacy);
+    }
+    expect([...registered].sort()).toEqual(
+      [
+        'connect',
+        'connect_error',
+        'disconnect',
+        'download_started',
+        'download_progress',
+        'chapter_completed',
+        'download_completed',
+        'queue_updated',
+        'scan_completed',
+        'dmca_alert',
+      ].sort(),
+    );
   });
 
   it('unbind removes every listener', () => {
