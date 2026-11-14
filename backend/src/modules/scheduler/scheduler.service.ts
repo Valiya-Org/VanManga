@@ -39,10 +39,17 @@ export class SchedulerService implements OnModuleInit {
   // --------------------------------------------------- startup
 
   async onModuleInit(): Promise<void> {
-    // Kavita initial sync (like kavitaTask() on boot in main.py)
+    // Kavita initial sync (like kavitaTask() on boot in main.py). Runs in the
+    // background: Flask awaited it, so an unreachable Kavita stalled startup.
+    // Nothing in the boot scan depends on kavita_url; requests are bounded
+    // by KavitaModule's HTTP timeout.
     if (this.kavita.enabled) {
-      this.logger.log('Running initial Kavita lib sync...');
-      await this.kavita.syncLibrary();
+      this.logger.log('Running initial Kavita lib sync in the background...');
+      void this.kavita.syncLibrary().catch((err: unknown) =>
+        this.logger.warn(
+          `Initial Kavita lib sync failed: ${(err as Error).message}`,
+        ),
+      );
     }
 
     // Boot scan in background — don't block module init
