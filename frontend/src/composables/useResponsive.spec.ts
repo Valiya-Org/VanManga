@@ -44,7 +44,6 @@ describe('useResponsive', () => {
 
   it('stop() removes the resize listener', () => {
     setWidth(1200);
-    const store = useAppStore();
     const removeSpy = vi.spyOn(window, 'removeEventListener');
     const stop = useResponsive();
     stop();
