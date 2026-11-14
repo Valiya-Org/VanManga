@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { http, setAdminTokenProvider } from '@/api/http';
 import { ApiError } from '@/api/errors';
+import type { Manga } from '@/api/types';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
 import { makeCandidate, makeManga } from '@/test/fixtures';
 import { useLibraryStore } from './library';
@@ -44,6 +45,17 @@ describe('library store · load, sort, filter', () => {
       makeManga({ manga_id: 'y', updated_at: 5, add_date: 2 }),
     ]);
     expect(lib.sorted.map((m) => m.manga_id)).toEqual(['y', 'x']);
+  });
+
+  it('falls back to add_date when a record has no updated_at', async () => {
+    const legacy: Partial<Manga> = makeManga({ manga_id: 'legacy', add_date: 250 });
+    delete legacy.updated_at;
+    const lib = await loaded([
+      makeManga({ manga_id: 'old', updated_at: 100, add_date: 1 }),
+      legacy as Manga,
+      makeManga({ manga_id: 'new', updated_at: 300, add_date: 1 }),
+    ]);
+    expect(lib.sorted.map((m) => m.manga_id)).toEqual(['new', 'legacy', 'old']);
   });
 
   it('keeps unknown extra fields from old records', async () => {
