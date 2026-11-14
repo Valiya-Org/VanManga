@@ -28,7 +28,7 @@ describe('endpoints', () => {
   });
 
   it('getSources: GET scraper/sources', async () => {
-    ok([{ name: 'dgmanga', displayName: 'DogeManga' }]);
+    ok([{ name: 'dgmanga', displayName: 'Example Source' }]);
     await expect(api.getSources()).resolves.toHaveLength(1);
     expect(sent()).toMatchObject({ method: 'GET', url: 'scraper/sources' });
   });
