@@ -61,7 +61,7 @@ describe('library store · load, sort, filter', () => {
   it('keeps unknown extra fields from old records', async () => {
     const legacy = { ...makeManga({ manga_id: 'z' }), some_old_field: 'kept' };
     const lib = await loaded([legacy]);
-    expect((lib.byId('z') as unknown as Record<string, unknown>).some_old_field).toBe('kept');
+    expect(lib.byId('z')!.some_old_field).toBe('kept');
   });
 
   it('filters by name, artist or id, case-insensitively and trimmed', async () => {

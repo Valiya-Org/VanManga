@@ -119,6 +119,8 @@ export interface Manga {
   source: string;
   kavita_url: string | null;
   recent_update_date?: string;
+  /** Other fields of old records, passed through untouched (contract §2). */
+  [extra: string]: unknown;
 }
 
 export interface SearchCandidate {
