@@ -277,8 +277,9 @@ describe('session store · admin token', () => {
     s.setAdminToken('x');
     const b = s.withAdmin(() => deleteManga('b')).catch((e: unknown) => e);
     await vi.waitFor(() => expect(server.requests).toHaveLength(2));
-    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0)); // B's 401 handled, B now waiting
     expect(ask).toHaveBeenCalledTimes(1); // B joined, no second dialog
+    expect(s.adminToken).toBeNull(); // B's rejected 'x' cleared
 
     answerFirst('bad');
     await vi.waitFor(() => expect(server.requests).toHaveLength(4)); // both retried with 'bad'

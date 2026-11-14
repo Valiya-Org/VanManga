@@ -37,6 +37,7 @@ describe('useSocket', () => {
     expect(url).toBe('');
     expect(options.path).toBe('/socket.io');
     expect(options.autoConnect).toBe(false);
+    expect(options).not.toHaveProperty('withCredentials');
   });
 
   it('reference-counts connect()/disconnect() across consumers', () => {

@@ -6,13 +6,20 @@ import axios, {
 import { ApiError } from './errors';
 import type { ApiFailure, ApiSuccess } from './types';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Admin-protected route (🔒): attach `X-Admin-Token` when one is held. */
+    adminProtected?: boolean;
+  }
+}
+
 /**
  * The single axios instance. Same-origin `/api` (contract §1.1); in dev the
- * Vite proxy forwards it to the backend.
+ * Vite proxy forwards it to the backend. Same-origin, so no
+ * `withCredentials`.
  */
 export const http: AxiosInstance = axios.create({
   baseURL: '/api',
-  withCredentials: true,
 });
 
 export const ADMIN_TOKEN_HEADER = 'X-Admin-Token';
@@ -28,11 +35,18 @@ export function setAdminTokenProvider(provider: AdminTokenProvider | null): void
   adminTokenProvider = provider;
 }
 
-http.interceptors.request.use((config) => {
-  const token = adminTokenProvider?.();
-  if (token) config.headers.set(ADMIN_TOKEN_HEADER, token);
-  return config;
-});
+// Synchronous so the token is read when the request is issued: withAdmin
+// compares it with the token held when the attempt started.
+http.interceptors.request.use(
+  (config) => {
+    if (!config.adminProtected) return config;
+    const token = adminTokenProvider?.();
+    if (token) config.headers.set(ADMIN_TOKEN_HEADER, token);
+    return config;
+  },
+  undefined,
+  { synchronous: true },
+);
 
 function isEnvelope(body: unknown): body is { code: number } {
   return (

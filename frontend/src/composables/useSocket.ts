@@ -23,7 +23,6 @@ function getSocket(): AppSocket {
     socket = io('', {
       path: '/socket.io',
       autoConnect: false,
-      withCredentials: true,
     });
   }
   return socket;

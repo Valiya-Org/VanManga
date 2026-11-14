@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AxiosHeaders } from 'axios';
 import { ApiError, isApiError } from './errors';
 import { http, request, setAdminTokenProvider } from './http';
+import * as api from './endpoints';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
 
 let server: FakeServer;
@@ -121,15 +122,57 @@ describe('admin token header', () => {
     expect(sentHeader()).toBeUndefined();
   });
 
-  it('carries the current token from the provider', async () => {
+  it('is not attached to ordinary requests even when a token is held', async () => {
+    setAdminTokenProvider(() => 'secret');
+    server.reply(200, { code: 200, data: true });
+    await request({ url: 'x' });
+    expect(sentHeader()).toBeUndefined();
+  });
+
+  it('carries the current token on admin-protected requests', async () => {
     let token = 'first';
     setAdminTokenProvider(() => token);
     server.reply(200, { code: 200, data: true });
-    await request({ url: 'x' });
+    await request({ url: 'x', adminProtected: true });
     expect(sentHeader()).toBe('first');
 
     token = 'second';
-    await request({ url: 'x' });
+    await request({ url: 'x', adminProtected: true });
     expect(sentHeader()).toBe('second');
+  });
+
+  it('reads the token when the request is issued, not later', async () => {
+    let token = 'at-call';
+    setAdminTokenProvider(() => token);
+    server.reply(200, { code: 200, data: true });
+    const p = request({ url: 'x', adminProtected: true });
+    token = 'changed';
+    await p;
+    expect(sentHeader()).toBe('at-call');
+  });
+
+  it('only delete and rezip are admin-protected', async () => {
+    setAdminTokenProvider(() => 'secret');
+    server.reply(200, { code: 200, data: true });
+    await api.deleteManga('m');
+    expect(sentHeader()).toBe('secret');
+    await api.rezipLibrary();
+    expect(sentHeader()).toBe('secret');
+    for (const call of [
+      () => api.getLibrary(),
+      () => api.getConfig(),
+      () => api.toggleAutoUpdate('m'),
+      () => api.queueDownload('m'),
+      () => api.kavitaLogin('u', 'p'),
+    ]) {
+      await call().catch(() => undefined);
+      expect(sentHeader()).toBeUndefined();
+    }
+  });
+});
+
+describe('credentials', () => {
+  it('does not send cross-site credentials (same-origin app)', () => {
+    expect(http.defaults.withCredentials).toBeFalsy();
   });
 });

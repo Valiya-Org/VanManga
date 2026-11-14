@@ -90,12 +90,12 @@ export function toggleAutoUpdate(mangaId: string): Promise<ToggleAutoUpdateResul
 
 /** `DELETE /api/library/:mangaId` 🔒 */
 export function deleteManga(mangaId: string): Promise<true> {
-  return request({ method: 'DELETE', url: `library/${id(mangaId)}` });
+  return request({ method: 'DELETE', url: `library/${id(mangaId)}`, adminProtected: true });
 }
 
 /** `POST /api/library/rezip` 🔒 */
 export function rezipLibrary(): Promise<TaskRef> {
-  return request({ method: 'POST', url: 'library/rezip' });
+  return request({ method: 'POST', url: 'library/rezip', adminProtected: true });
 }
 
 // ------------------------------------------------------------- §3.4 download
