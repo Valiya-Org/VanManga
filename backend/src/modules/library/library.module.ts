@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LibraryLegacyController } from './library-legacy.controller';
 import { LibraryController } from './library.controller';
 import { LibraryRepository } from './library.repository';
 import { LibraryService } from './library.service';
@@ -7,7 +8,7 @@ import { MangaFactoryService } from './services/manga-factory.service';
 import { PaginationService } from './services/pagination.service';
 
 @Module({
-  controllers: [LibraryController],
+  controllers: [LibraryController, LibraryLegacyController],
   providers: [
     LibraryRepository,
     LibraryService,

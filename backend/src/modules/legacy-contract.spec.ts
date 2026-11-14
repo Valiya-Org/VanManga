@@ -8,7 +8,7 @@ import { DownloadController } from './download/download.controller';
 import { DownloadService } from './download/download.service';
 import { TaskQueueService } from './download/queue/task-queue.service';
 import { ThumbnailService } from './filesystem/thumbnail.service';
-import { LibraryController } from './library/library.controller';
+import { LibraryLegacyController } from './library/library-legacy.controller';
 import { LibraryService } from './library/library.service';
 import { ScraperLegacyController } from './scraper/scraper-legacy.controller';
 import { ScraperService } from './scraper/scraper.service';
@@ -66,7 +66,7 @@ describe('Legacy /api/dogemanga/* contract (unchanged in P2)', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [LibraryController, DownloadController, ScraperLegacyController],
+      controllers: [LibraryLegacyController, DownloadController, ScraperLegacyController],
       providers: [
         { provide: LibraryService, useValue: library },
         { provide: ThumbnailService, useValue: { getThumbnailPath: jest.fn() } },

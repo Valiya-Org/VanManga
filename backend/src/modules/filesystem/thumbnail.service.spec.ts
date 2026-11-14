@@ -1,5 +1,24 @@
 import { ThumbnailService } from './thumbnail.service';
 
+describe('ThumbnailService.getThumbnailPath', () => {
+  const fsService = { exists: jest.fn(async () => true) };
+  const svc = new ThumbnailService(
+    { get: jest.fn(() => '/thumbs') } as never,
+    fsService as never,
+  );
+
+  it('resolves <dir>/<id>.jpg', async () => {
+    await expect(svc.getThumbnailPath('-x')).resolves.toMatch(/-x\.jpg$/);
+  });
+
+  it.each(['../secret', '../../etc/x', 'a/b'])(
+    'refuses ids that leave the directory (%p)',
+    async (id) => {
+      await expect(svc.getThumbnailPath(id)).rejects.toThrow('Thumbnail not found');
+    },
+  );
+});
+
 describe('ThumbnailService.persistAndLink', () => {
   it('writes the cover and links it by relative path (no domain in the library file)', async () => {
     const fsService = {

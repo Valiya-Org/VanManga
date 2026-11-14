@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
 import type { AppConfig } from '../../config/configuration';
 import { FilesystemService } from './filesystem.service';
 
@@ -48,6 +48,10 @@ export class ThumbnailService {
 
   async getThumbnailPath(mangaId: string): Promise<string> {
     const file = join(this.dir, `${mangaId}.jpg`);
+    // The id comes from the URL; refuse anything that escapes the directory.
+    if (resolve(dirname(file)) !== resolve(this.dir)) {
+      throw new NotFoundException(`Thumbnail not found for ${mangaId}`);
+    }
     if (!(await this.fsService.exists(file))) {
       throw new NotFoundException(`Thumbnail not found for ${mangaId}`);
     }
