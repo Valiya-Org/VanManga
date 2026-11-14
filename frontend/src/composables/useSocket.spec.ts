@@ -19,8 +19,6 @@ vi.mock('socket.io-client', () => ({
 import { useSocket } from './useSocket';
 
 beforeEach(() => {
-  socketStub.on.mockClear();
-  socketStub.off.mockClear();
   socketStub.connect.mockClear();
   socketStub.disconnect.mockClear();
   socketStub.connected = false;
@@ -31,22 +29,14 @@ describe('useSocket', () => {
     expect(useSocket().socket).toBe(useSocket().socket);
   });
 
-  it('creates the underlying socket exactly once, with autoConnect disabled', () => {
+  it('creates the socket once, same-origin on /socket.io, autoConnect off', () => {
     useSocket();
     useSocket();
-    // io is only ever invoked once for the whole module (the singleton).
     expect(ioMock).toHaveBeenCalledTimes(1);
-    const options = ioMock.mock.calls[0][1] as { autoConnect: boolean };
+    const [url, options] = ioMock.mock.calls[0] as [string, { autoConnect: boolean; path: string }];
+    expect(url).toBe('');
+    expect(options.path).toBe('/socket.io');
     expect(options.autoConnect).toBe(false);
-  });
-
-  it('on()/off() delegate to the shared socket', () => {
-    const { on, off } = useSocket();
-    const handler = vi.fn();
-    on('scan_completed', handler);
-    expect(socketStub.on).toHaveBeenCalledWith('scan_completed', handler);
-    off('scan_completed', handler);
-    expect(socketStub.off).toHaveBeenCalledWith('scan_completed', handler);
   });
 
   it('reference-counts connect()/disconnect() across consumers', () => {
@@ -56,12 +46,12 @@ describe('useSocket', () => {
     a.connect();
     expect(socketStub.connect).toHaveBeenCalledTimes(1);
 
-    socketStub.connected = true; // simulate the connection being established
+    socketStub.connected = true;
     b.connect();
-    expect(socketStub.connect).toHaveBeenCalledTimes(1); // no second dial
+    expect(socketStub.connect).toHaveBeenCalledTimes(1);
 
     a.disconnect();
-    expect(socketStub.disconnect).not.toHaveBeenCalled(); // b still holds a ref
+    expect(socketStub.disconnect).not.toHaveBeenCalled();
 
     b.disconnect();
     expect(socketStub.disconnect).toHaveBeenCalledTimes(1);

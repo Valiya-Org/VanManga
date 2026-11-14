@@ -2,43 +2,32 @@ import { describe, it, expect } from 'vitest';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { routes } from './index';
 
-function makeRouter() {
-  return createRouter({ history: createMemoryHistory(), routes });
+async function resolve(path: string) {
+  const router = createRouter({ history: createMemoryHistory(), routes });
+  await router.push(path);
+  await router.isReady();
+  return router.currentRoute.value;
 }
 
 describe('router', () => {
-  it('redirects / to /mainpage/searchpage', async () => {
-    const router = makeRouter();
-    await router.push('/');
-    await router.isReady();
-    expect(router.currentRoute.value.fullPath).toBe('/mainpage/searchpage');
+  it('serves the library at /', async () => {
+    expect((await resolve('/')).name).toBe('library');
   });
 
-  it('redirects /mainpage to /mainpage/searchpage', async () => {
-    const router = makeRouter();
-    await router.push('/mainpage');
-    await router.isReady();
-    expect(router.currentRoute.value.fullPath).toBe('/mainpage/searchpage');
+  it('serves settings at /settings', async () => {
+    expect((await resolve('/settings')).name).toBe('settings');
   });
 
-  it('resolves /mainpage/mangaku to MangaKu', async () => {
-    const router = makeRouter();
-    await router.push('/mainpage/mangaku');
-    await router.isReady();
-    expect(router.currentRoute.value.matched.at(-1)?.name).toBe('MangaKu');
-  });
+  it.each(['/mainpage', '/mainpage/searchpage', '/mainpage/mangaku', '/mainpage/a/b'])(
+    'redirects legacy %s to /',
+    async (path) => {
+      const route = await resolve(path);
+      expect(route.fullPath).toBe('/');
+      expect(route.name).toBe('library');
+    },
+  );
 
-  it('resolves /mainpage/kavitaLinkCheck to KavitaCheck', async () => {
-    const router = makeRouter();
-    await router.push('/mainpage/kavitaLinkCheck');
-    await router.isReady();
-    expect(router.currentRoute.value.matched.at(-1)?.name).toBe('KavitaCheck');
-  });
-
-  it('falls back unknown paths to Error', async () => {
-    const router = makeRouter();
-    await router.push('/nope/nope');
-    await router.isReady();
-    expect(router.currentRoute.value.name).toBe('Error');
+  it('redirects unknown paths to /', async () => {
+    expect((await resolve('/nope/nope')).fullPath).toBe('/');
   });
 });

@@ -5,9 +5,3 @@ declare module '*.vue' {
   const component: DefineComponent<object, object, unknown>;
   export default component;
 }
-
-// Injected at runtime by the backend via GET /js/config.js
-interface Window {
-  MANGA_BASE_URL?: string;
-  MANGA_BASE_WEBSOCKET_URL?: string;
-}

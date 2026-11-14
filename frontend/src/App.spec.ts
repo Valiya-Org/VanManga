@@ -1,47 +1,74 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils';
+import { createRouter, createMemoryHistory } from 'vue-router';
 import { createPinia, setActivePinia } from 'pinia';
 
-vi.mock('@/api/kavita', () => ({
-  kavitaStatus: vi.fn(() => Promise.resolve({ code: 200, data: null })),
-}));
-vi.mock('@/utils/ui', () => ({
-  showLoading: vi.fn(() => ({ close: vi.fn() })),
-  messageError: vi.fn(),
-}));
+// The transport is faked; the dispatcher and stores run for real.
+const listeners = new Map<string, (...a: unknown[]) => void>();
+const socketStub = {
+  connected: false,
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  on: vi.fn((e: string, h: (...a: unknown[]) => void) => listeners.set(e, h)),
+  off: vi.fn((e: string) => listeners.delete(e)),
+};
+vi.mock('socket.io-client', () => ({ io: () => socketStub }));
 
-import { kavitaStatus } from '@/api/kavita';
+import { http } from '@/api/http';
+import { fakeServer, type FakeServer } from '@/test/fake-server';
+import { useConfigStore } from '@/stores/config';
+import { useQueueStore } from '@/stores/queue';
 import App from './App.vue';
+import { routes } from './router';
 
+let server: FakeServer;
 beforeEach(() => {
-  setActivePinia(createPinia());
-  localStorage.clear();
-  vi.clearAllMocks();
-  (window as unknown as { MANGA_BASE_URL?: string }).MANGA_BASE_URL = 'http://x';
+  server = fakeServer(http);
+  listeners.clear();
+  socketStub.connect.mockClear();
+  socketStub.disconnect.mockClear();
 });
+afterEach(() => server.restore());
+enableAutoUnmount(afterEach);
 
-describe('App init', () => {
-  it('renders router-view outlet', () => {
-    const wrapper = mount(App, {
-      global: { stubs: { 'router-view': true } },
+async function mountApp(path = '/') {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const router = createRouter({ history: createMemoryHistory(), routes });
+  await router.push(path);
+  await router.isReady();
+  const wrapper = mount(App, { global: { plugins: [pinia, router] } });
+  await flushPromises();
+  return wrapper;
+}
+
+describe('App shell', () => {
+  it('renders the routed view inside the Nuxt UI app wrapper', async () => {
+    const wrapper = await mountApp('/settings');
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(true);
+  });
+
+  it('loads config, connects the socket once and routes events to stores', async () => {
+    server.reply(200, {
+      code: 200,
+      data: { kavitaEnabled: true, kavitaExposeUrl: 'http://k', adminRequired: true },
     });
-    expect(wrapper.find('#app').exists()).toBe(true);
+    await mountApp();
+
+    expect(useConfigStore().adminRequired).toBe(true);
+    expect(socketStub.connect).toHaveBeenCalledTimes(1);
+
+    listeners.get('queue_updated')!({
+      active: null,
+      pending: [{ id: 't', kind: 'full-manga', mangaId: 'm', status: 'pending', enqueuedAt: 1 }],
+    });
+    expect(useQueueStore().count).toBe(1);
   });
 
-  it('checks server status when no cached serverStatus', async () => {
-    mount(App, { global: { stubs: { 'router-view': true } } });
-    await Promise.resolve();
-    expect(kavitaStatus).toHaveBeenCalledTimes(1);
-  });
-
-  it('skips server check when fresh cache exists', async () => {
-    localStorage.setItem('serverStatus', 'true');
-    localStorage.setItem(
-      'serverStatusLastCheckTime',
-      JSON.stringify(Date.now()),
-    );
-    mount(App, { global: { stubs: { 'router-view': true } } });
-    await Promise.resolve();
-    expect(kavitaStatus).not.toHaveBeenCalled();
+  it('unbinds and disconnects on unmount', async () => {
+    const wrapper = await mountApp();
+    wrapper.unmount();
+    expect(listeners.size).toBe(0);
+    expect(socketStub.disconnect).toHaveBeenCalledTimes(1);
   });
 });

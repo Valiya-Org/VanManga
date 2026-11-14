@@ -1,62 +1,79 @@
 import axios, {
-  type AxiosError,
+  isAxiosError,
   type AxiosInstance,
-  type AxiosResponse,
+  type AxiosRequestConfig,
 } from 'axios';
+import { ApiError } from './errors';
+import type { ApiFailure, ApiSuccess } from './types';
 
 /**
- * Shared axios instance. All API modules import this.
- * baseURL '/api' matches the NestJS global prefix; in dev the Vite
- * proxy forwards /api to the backend.
+ * The single axios instance. Same-origin `/api` (contract §1.1); in dev the
+ * Vite proxy forwards it to the backend.
  */
 export const http: AxiosInstance = axios.create({
   baseURL: '/api',
   withCredentials: true,
 });
 
-/** A backend `{ code, data }` envelope. */
-interface Envelope {
-  code: number;
-  data?: unknown;
+export const ADMIN_TOKEN_HEADER = 'X-Admin-Token';
+
+type AdminTokenProvider = () => string | null | undefined;
+let adminTokenProvider: AdminTokenProvider | null = null;
+
+/**
+ * Registers where the admin token comes from. The session store calls this;
+ * keeping it a callback keeps this module free of Pinia. Pass `null` to clear.
+ */
+export function setAdminTokenProvider(provider: AdminTokenProvider | null): void {
+  adminTokenProvider = provider;
+}
+
+http.interceptors.request.use((config) => {
+  const token = adminTokenProvider?.();
+  if (token) config.headers.set(ADMIN_TOKEN_HEADER, token);
+  return config;
+});
+
+function isEnvelope(body: unknown): body is { code: number } {
+  return (
+    body !== null &&
+    typeof body === 'object' &&
+    typeof (body as { code?: unknown }).code === 'number'
+  );
+}
+
+function isFailure(body: unknown): body is ApiFailure {
+  return isEnvelope(body) && typeof (body as { error?: unknown }).error === 'string';
+}
+
+/** Converts anything axios throws into an {@link ApiError}. */
+export function toApiError(err: unknown): ApiError {
+  if (err instanceof ApiError) return err;
+  if (isAxiosError(err)) {
+    const res = err.response;
+    if (!res) return new ApiError(0, 'network-error', err.message);
+    if (isFailure(res.data)) {
+      const body = res.data;
+      return new ApiError(res.status, body.error, body.message, body.data);
+    }
+    return new ApiError(res.status, `http-${res.status}`, err.message);
+  }
+  return new ApiError(0, 'network-error', err instanceof Error ? err.message : String(err));
 }
 
 /**
- * Most legacy `/dogemanga/*` routes return HTTP 200 with a `{ code, data }`
- * body, but a few paths `throw` a NestJS HttpException for a non-200 semantic
- * code (e.g. 434 "manga is downloading, can't delete"). The global
- * AllExceptionsFilter then serves those as a non-2xx status with the real
- * envelope nested under `message`. axios rejects non-2xx responses, so without
- * this the caller's `res.code` branching is bypassed entirely.
- *
- * Returns the unwrapped envelope when `body.message` is itself a `{ code }`
- * envelope; otherwise `null` (a genuine error that should keep rejecting).
+ * Performs a request and returns the envelope's `data`; rejects with
+ * {@link ApiError} on any failure. All api functions go through this.
  */
-function extractEnvelope(body: unknown): Envelope | null {
-  if (body === null || typeof body !== 'object' || !('message' in body)) {
-    return null;
+export async function request<T>(config: AxiosRequestConfig): Promise<T> {
+  let body: unknown;
+  try {
+    body = (await http.request<unknown>(config)).data;
+  } catch (err) {
+    throw toApiError(err);
   }
-  const message = (body as { message: unknown }).message;
-  if (
-    message !== null &&
-    typeof message === 'object' &&
-    typeof (message as { code?: unknown }).code === 'number'
-  ) {
-    return message as Envelope;
+  if (!isEnvelope(body) || !('data' in body)) {
+    throw new ApiError(200, 'invalid-response', 'Response is not an API envelope');
   }
-  return null;
+  return (body as ApiSuccess<T>).data;
 }
-
-/**
- * Response-interceptor error handler. Unwraps a thrown `{ code, data }`
- * envelope (see {@link extractEnvelope}) back into a resolved response so
- * callers keep reading `res.code`/`res.data`. Genuine errors are re-rejected.
- */
-export function unwrapEnvelopeError(error: AxiosError): Promise<AxiosResponse> {
-  const envelope = extractEnvelope(error.response?.data);
-  if (envelope && error.response) {
-    return Promise.resolve({ ...error.response, data: envelope });
-  }
-  return Promise.reject(error);
-}
-
-http.interceptors.response.use((response) => response, unwrapEnvelopeError);
