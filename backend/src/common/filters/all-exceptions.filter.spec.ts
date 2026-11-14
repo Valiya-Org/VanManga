@@ -58,6 +58,12 @@ class ProbeController {
     throw new Error('kaboom');
   }
 
+  @Get('library/boom-with-status')
+  boomWithStatus() {
+    // Carries a status but is not marked safe to expose.
+    throw Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:5000'), { status: 404 });
+  }
+
   @Post('library/validate')
   validate(@Body() body: Body1) {
     return body;
@@ -140,8 +146,31 @@ describe('AllExceptionsFilter', () => {
       expect(res.body).toMatchObject({ code: 404, error: 'not-found' });
     });
 
+    it('malformed JSON body → 400 bad-request', async () => {
+      const res = await http()
+        .post('/api/library/validate')
+        .set('Content-Type', 'application/json')
+        .send('{"name":')
+        .expect(400);
+      expect(res.body).toMatchObject({ code: 400, error: 'bad-request' });
+    });
+
+    it('oversized body → 413 payload-too-large', async () => {
+      // The default parser in this test app has a 100kb limit.
+      const res = await http()
+        .post('/api/library/validate')
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ name: 'x'.repeat(200 * 1024) }))
+        .expect(413);
+      expect(res.body).toEqual({ code: 413, error: 'payload-too-large' });
+    });
+
     it('non-HTTP errors → 500 internal-error without leaking the message', async () => {
       await http().get('/api/library/boom').expect(500, {
+        code: 500,
+        error: 'internal-error',
+      });
+      await http().get('/api/library/boom-with-status').expect(500, {
         code: 500,
         error: 'internal-error',
       });

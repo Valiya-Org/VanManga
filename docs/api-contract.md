@@ -82,6 +82,8 @@ type ApiErrorCode =
 
 客户端遇到表中没有的 `error` 字符串时，应按 HTTP 状态做通用处理。没有专门错误码的异常由过滤器按状态给缺省值：`bad-request`(400)、`unauthorized`(401)、`forbidden`(403)、`not-found`(404)、`conflict`(409)、`payload-too-large`(413)、`rate-limited`(429)、`internal-error`(500)，其余为 `http-<status>`。`internal-error` 不带 `message`（细节只写日志）。
 
+任何接口的请求体都可能触发：请求体不是合法 JSON → `400 bad-request`（带 `message`）；请求体超过 25 MB → `413 payload-too-large`（不带 `message`）。
+
 ### 1.4 管理员口令
 
 - 服务端环境变量 `ADMIN_TOKEN`。未设置（或为空）时不启用保护，下文标注 🔒 的接口无需口令。

@@ -23,6 +23,23 @@ const DEFAULT_ERRORS: Record<number, string> = {
   500: 'internal-error',
 };
 
+/** The 4xx status of an `http-errors`-style error that a middleware raised
+ *  and marked safe to expose — body-parser's `entity.too.large` (413),
+ *  `charset.unsupported` (415) and so on. Anything else is not trusted
+ *  and stays a 500. (Malformed JSON is a SyntaxError that Nest has already
+ *  turned into a BadRequestException.) */
+function exposedClientStatus(exception: unknown): number | null {
+  if (!(exception instanceof Error)) return null;
+  const { status, statusCode, expose } = exception as Error & {
+    status?: unknown;
+    statusCode?: unknown;
+    expose?: unknown;
+  };
+  const code = typeof status === 'number' ? status : statusCode;
+  if (expose !== true || typeof code !== 'number') return null;
+  return code >= 400 && code < 500 ? code : null;
+}
+
 interface CanonicalFailure {
   code: number;
   error: string;
@@ -42,7 +59,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+        : (exposedClientStatus(exception) ?? HttpStatus.INTERNAL_SERVER_ERROR);
 
     const log = `[${request.method}] ${request.url} -> ${status}`;
     if (status >= 500) {
@@ -77,6 +94,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   private canonical(exception: unknown, status: number): CanonicalFailure {
     if (!(exception instanceof HttpException)) {
+      if (status < 500) {
+        // A middleware's client error (e.g. body-parser's 413): the status
+        // is the whole story; its message stays in the log.
+        return { code: status, error: DEFAULT_ERRORS[status] ?? `http-${status}` };
+      }
       // Internal details stay in the log, not in the response.
       return { code: status, error: 'internal-error' };
     }
