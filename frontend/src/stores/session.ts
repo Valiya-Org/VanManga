@@ -138,33 +138,56 @@ export const useSessionStore = defineStore('session', () => {
     prompt = fn;
   }
 
-  function askOnce(req: AdminTokenRequest): Promise<string | null> {
+  /**
+   * Opens the prompt, or joins the one already open. A joiner never passes
+   * its own reason: it just waits for the user's answer and re-evaluates.
+   */
+  function ask(reason: AdminTokenRequest['reason']): Promise<string | null> {
     if (!pendingPrompt) {
-      pendingPrompt = prompt!(req).finally(() => {
-        pendingPrompt = null;
-      });
+      const fn = prompt!;
+      pendingPrompt = fn({ reason })
+        .then((t) => t || null)
+        .finally(() => {
+          pendingPrompt = null;
+        });
     }
     return pendingPrompt;
   }
 
   /**
-   * Runs an admin-protected call. On 401 `admin-token-required|invalid`
-   * asks for the token via the registered prompt, stores it and retries the
-   * same call; repeats until success or the user cancels, in which case the
-   * last 401 ApiError is rethrown. Concurrent callers share one prompt.
+   * Runs an admin-protected call. On 401 `admin-token-required|invalid`:
+   *
+   * - if the token changed since this attempt was sent, retries with the
+   *   current token without prompting;
+   * - otherwise the sent token was rejected: it is cleared from memory and
+   *   the user is asked (reason `admin-token-invalid` when a token had been
+   *   sent, else the server's reason). An answer equal to the rejected token
+   *   is treated as rejected and asked again (`admin-token-invalid`); any
+   *   other answer is stored and the same call retried.
+   *
+   * Repeats until success or the user cancels (`null`/empty), in which case
+   * the last 401 ApiError is rethrown and the token stays cleared. Callers
+   * that hit a 401 while a prompt is open share it, and a cancel rejects
+   * all of them. Without a registered prompt the 401 propagates.
    */
   async function withAdmin<T>(op: () => Promise<T>): Promise<T> {
     for (;;) {
+      const sent = adminToken.value;
       try {
         return await op();
       } catch (err) {
         if (!isApiError(err) || !err.isAdminTokenError || !prompt) throw err;
-        const reason = err.error as AdminTokenRequest['reason'];
-        const token = await askOnce({ reason });
-        if (!token) {
-          if (reason === 'admin-token-invalid') adminToken.value = null;
-          throw err;
+        // A newer token was entered meanwhile: retry with it. (A token that
+        // was cleared meanwhile was rejected for another caller: ask.)
+        if (adminToken.value !== null && adminToken.value !== sent) continue;
+        let reason = err.error as AdminTokenRequest['reason'];
+        if (sent !== null) {
+          adminToken.value = null;
+          reason = 'admin-token-invalid';
         }
+        let token = await ask(reason);
+        while (token !== null && token === sent) token = await ask('admin-token-invalid');
+        if (token === null) throw err;
         adminToken.value = token;
       }
     }

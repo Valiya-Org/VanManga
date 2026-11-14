@@ -188,19 +188,134 @@ describe('session store · admin token', () => {
     expect(s.adminToken).toBe('secret');
   });
 
-  it('withAdmin: a wrong token clears it and asks again', async () => {
+  it('withAdmin: a rejected token is cleared from memory and the user is asked again', async () => {
     server.replyOnce(401, { code: 401, error: 'admin-token-invalid' });
     server.replyOnce(200, { code: 200, data: true });
-    const ask = vi.fn().mockResolvedValue('right');
     const s = useSessionStore();
+    let tokenWhileAsking: string | null | undefined;
+    const ask = vi.fn(async () => {
+      tokenWhileAsking = s.adminToken;
+      return 'right';
+    });
     s.setAdminToken('wrong');
     s.setAdminTokenPrompt(ask);
 
     await s.withAdmin(() => deleteManga('m'));
 
     expect(ask).toHaveBeenCalledWith({ reason: 'admin-token-invalid' });
+    expect(tokenWhileAsking).toBeNull();
     expect(tokenHeaderOf(0)).toBe('wrong');
     expect(tokenHeaderOf(1)).toBe('right');
+    expect(s.adminToken).toBe('right');
+  });
+
+  it('withAdmin: cancelling after a rejection leaves no token in memory', async () => {
+    server.reply(401, { code: 401, error: 'admin-token-invalid' });
+    const s = useSessionStore();
+    s.setAdminToken('wrong');
+    s.setAdminTokenPrompt(async () => null);
+    await expect(s.withAdmin(() => deleteManga('m'))).rejects.toMatchObject({
+      error: 'admin-token-invalid',
+    });
+    expect(s.adminToken).toBeNull();
+  });
+
+  it('withAdmin: cancelling a "required" prompt rejects without retrying', async () => {
+    server.reply(401, { code: 401, error: 'admin-token-required' });
+    const s = useSessionStore();
+    s.setAdminTokenPrompt(async () => null);
+    await expect(s.withAdmin(() => deleteManga('m'))).rejects.toMatchObject({
+      error: 'admin-token-required',
+    });
+    expect(s.adminToken).toBeNull();
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('withAdmin: a 401 for a request sent before the token changed retries without prompting', async () => {
+    const a = server.replyDeferred();
+    const b = server.replyDeferred();
+    server.reply(200, { code: 200, data: true });
+    const ask = vi.fn().mockResolvedValue('secret');
+    const s = useSessionStore();
+    s.setAdminTokenPrompt(ask);
+
+    const first = s.withAdmin(() => deleteManga('a'));
+    const second = s.withAdmin(() => deleteManga('b'));
+    await Promise.all([a.received, b.received]);
+
+    a.resolve(401, { code: 401, error: 'admin-token-required' });
+    await expect(first).resolves.toBe(true);
+    b.resolve(401, { code: 401, error: 'admin-token-required' });
+    await expect(second).resolves.toBe(true);
+
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(server.requests).toHaveLength(4);
+    expect(tokenHeaderOf(3)).toBe('secret');
+  });
+
+  it('withAdmin: a caller joining an open prompt does not get a stale reason later', async () => {
+    // A opens a "required" prompt; B's request was sent with a token that is
+    // then rejected while the prompt is open. B waits for the same prompt.
+    // The answer is wrong for both, so the next prompt must say "invalid".
+    const aFirst = server.replyDeferred();
+    server.replyOnce(401, { code: 401, error: 'admin-token-invalid' }); // B with 'x'
+    server.reply(401, { code: 401, error: 'admin-token-invalid' }); // retries with 'bad'
+    let answerFirst!: (t: string | null) => void;
+    let answerSecond!: (t: string | null) => void;
+    const ask = vi
+      .fn<(req: { reason: string }) => Promise<string | null>>()
+      .mockImplementationOnce(() => new Promise((r) => (answerFirst = r)))
+      .mockImplementationOnce(() => new Promise((r) => (answerSecond = r)));
+    const s = useSessionStore();
+    s.setAdminTokenPrompt(ask);
+
+    const a = s.withAdmin(() => deleteManga('a')).catch((e: unknown) => e);
+    await aFirst.received;
+    aFirst.resolve(401, { code: 401, error: 'admin-token-required' });
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+
+    s.setAdminToken('x');
+    const b = s.withAdmin(() => deleteManga('b')).catch((e: unknown) => e);
+    await vi.waitFor(() => expect(server.requests).toHaveLength(2));
+    await Promise.resolve();
+    expect(ask).toHaveBeenCalledTimes(1); // B joined, no second dialog
+
+    answerFirst('bad');
+    await vi.waitFor(() => expect(server.requests).toHaveLength(4)); // both retried with 'bad'
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(ask).toHaveBeenCalledTimes(2); // both share the second dialog
+    answerSecond(null);
+    const [ea, eb] = await Promise.all([a, b]);
+
+    expect(ask.mock.calls.map((c) => c[0].reason)).toEqual([
+      'admin-token-required',
+      'admin-token-invalid',
+    ]);
+    expect(ea).toMatchObject({ error: 'admin-token-invalid' });
+    expect(eb).toMatchObject({ error: 'admin-token-invalid' });
+    expect(s.adminToken).toBeNull();
+  });
+
+  it('withAdmin: the prompt returning the just-rejected token asks again instead of retrying', async () => {
+    server.reply(401, { code: 401, error: 'admin-token-invalid' });
+    const ask = vi
+      .fn()
+      .mockResolvedValueOnce('wrong')
+      .mockResolvedValueOnce('wrong')
+      .mockResolvedValueOnce(null);
+    const s = useSessionStore();
+    s.setAdminToken('wrong');
+    s.setAdminTokenPrompt(ask);
+
+    await expect(s.withAdmin(() => deleteManga('m'))).rejects.toMatchObject({
+      error: 'admin-token-invalid',
+    });
+
+    expect(server.requests).toHaveLength(1);
+    expect(ask).toHaveBeenCalledTimes(3);
+    for (const [req] of ask.mock.calls) expect(req).toEqual({ reason: 'admin-token-invalid' });
+    expect(s.adminToken).toBeNull();
   });
 
   it('withAdmin: keeps asking until the user cancels, then rethrows the 401', async () => {
