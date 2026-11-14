@@ -43,6 +43,13 @@ describe('endpoints', () => {
     });
   });
 
+  it('searchManga: passes an AbortSignal through', async () => {
+    ok([]);
+    const controller = new AbortController();
+    await api.searchManga('dgmanga', 'q', { signal: controller.signal });
+    expect(server.lastRequest()!.signal).toBe(controller.signal);
+  });
+
   it('getLibrary: GET library', async () => {
     ok([makeManga({ manga_id: 'a' })]);
     const list = await api.getLibrary();

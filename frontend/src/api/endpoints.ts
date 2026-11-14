@@ -41,12 +41,20 @@ export function getSources(): Promise<ScraperSource[]> {
   return request({ method: 'GET', url: 'scraper/sources' });
 }
 
-/** `GET /api/scraper/:source/search?q=` — `[]` when nothing matches. */
-export function searchManga(source: string, q: string): Promise<SearchCandidate[]> {
+/**
+ * `GET /api/scraper/:source/search?q=` — `[]` when nothing matches. Pass a
+ * `signal` to abort it (rejects with ApiError `canceled`).
+ */
+export function searchManga(
+  source: string,
+  q: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<SearchCandidate[]> {
   return request({
     method: 'GET',
     url: `scraper/${encodeURIComponent(source)}/search`,
     params: { q },
+    signal: options.signal,
   });
 }
 
