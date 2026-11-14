@@ -129,6 +129,8 @@ interface Manga {
   kavita_url: string | null;
   /** 源站最近更新日期（部分源在搜索时提供）。 */
   recent_update_date?: string;
+  /** 旧记录里的其他字段原样透传：客户端必须容忍未知的额外字段。 */
+  [extra: string]: unknown;
 }
 
 /** 搜索结果中的一个候选。 */
@@ -223,7 +225,7 @@ type Data = {
 - `GET /api/scraper/:source/manga/:mangaId/chapters` → `data: Chapter[]`
 - `GET /api/scraper/:source/chapter-images?url=<章节页>` → `data: { chapterTitle: string; imageUrls: string[]; requestHeaders?: Record<string, string> }`
 
-共同失败：`404 unknown-source`、`502 scraper-failed`、`502 scraper-blocked`、`429 rate-limited`（仅 chapter-images）、`451 dmca`。
+共同失败：`404 unknown-source`、`502 scraper-failed`、`502 scraper-blocked`、`429 rate-limited`、`451 dmca`。三个接口用同一套映射，任何一个都可能返回 `429`（当前 dgmanga 源实际只在 chapter-images 上报限流）。
 
 ### 3.3 漫画库
 
@@ -261,7 +263,7 @@ type Data =
 | 400 | `validation-failed` | 缺 `manga_id`/`source`，或 `submit_sign` 非法 | — |
 | 409 | `already-in-library` | 该 `manga_id` 已在库中 | `{ manga: Manga }` |
 | 409 | `duplicate` | 未带 `submit_sign: '1'` 且库中有名字相近的漫画 | `{ duplicates: string[] }`（相近漫画的名字） |
-| 410 | `search-expired` | 搜索缓存中已无该候选（过期、重启或未搜索过） | — |
+| 410 | `search-expired` | 搜索缓存中已无该候选（过期、重启或未搜索过）；`source` 未注册时同样如此（未注册的源无法被搜索，缓存里不可能有它） | — |
 
 二次确认流程：收到 `duplicate` → 让用户确认 → 用 `submit_sign: '1'` 重发；用户放弃则可发 `submit_sign: '2'` 或什么都不发。收到 `search-expired` → 重新搜索后重发。
 
@@ -275,7 +277,7 @@ type Data =
 读取**路径参数** `mangaId`，按该漫画的 `source` 实时抓取。
 
 - 成功：`data: Chapter[]`
-- 失败：`404 manga-not-found`、`502 scraper-failed`、`502 scraper-blocked`、`451 dmca`
+- 失败：`404 manga-not-found`、`404 unknown-source`（该漫画记录的 `source` 未注册）、`429 rate-limited`（源站限流；当前 dgmanga 源不会在章节列表上报）、`502 scraper-failed`、`502 scraper-blocked`、`451 dmca`
 
 #### `POST /api/library/:mangaId/auto-update` — 切换自动更新
 
@@ -407,8 +409,11 @@ interface DownloadStartedEvent {
   kind: 'full-manga' | 'redownload';
 }
 
-/** 章节级进度。确定本次要下的章节后先发一次（chapters_done = 0），
- *  之后每个章节结束（成功或失败）各发一次。 */
+/** 章节级进度。确定本次要下的章节（至少 1 个）后先发一次（chapters_done = 0），
+ *  之后每个章节结束（成功或失败）各发一次。
+ *  没有要下的章节（full-manga 已是最新）或章节列表被拦截（Cloudflare / DMCA）时
+ *  一次也不发——download_started 之后可能直接是 download_completed，
+ *  客户端不得等待 0/N 事件。 */
 interface DownloadProgressEvent {
   manga_id: string;
   chapters_total: number;
@@ -443,7 +448,9 @@ interface DownloadCompletedEvent {
   manga: Manga | null;
 }
 
-/** 队列变化：任务入队、开始、结束（含失败）时各发一次，载荷为变化后的完整快照。 */
+/** 队列变化：任务入队、开始、结束（含失败）时各发一次；redownload 被并入一个排队中的
+ *  redownload 时也发（任务数不变，快照可能与上一次完全相同，因为快照不含章节）。
+ *  载荷为变化后的完整快照。 */
 // queue_updated: QueueSnapshot（见第 2 节）
 
 /** scan_completed：rezip 任务结束，无载荷。 */
@@ -455,7 +462,7 @@ interface DmcaAlertEvent {
 }
 ```
 
-典型顺序（添加一部漫画）：`queue_updated`（入队）→ `queue_updated`（开始）→ `download_started` → `download_progress`(0/N) → [`chapter_completed` → `download_progress`] × N → `download_completed` → `queue_updated`（结束）。
+典型顺序（添加一部漫画）：`queue_updated`（入队）→ `queue_updated`（开始）→ `download_started` → `download_progress`(0/N) → [`chapter_completed` → `download_progress`] × N → `download_completed` → `queue_updated`（结束）。没有要下的章节或章节列表被拦截时，`download_started` 之后直接是 `download_completed`（`chapters_total: 0`），没有 `download_progress`。
 
 ## 5. 遗留接口（P4 删除，新客户端勿用）
 
