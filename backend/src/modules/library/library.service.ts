@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
 import type { AppConfig } from '../../config/configuration';
 import { FilesystemService } from '../filesystem/filesystem.service';
+import { mangaFolderName } from '../filesystem/manga-path';
 import { ThumbnailService } from '../filesystem/thumbnail.service';
 import { SearchCacheService } from '../search-cache/search-cache.service';
 import {
@@ -198,7 +199,7 @@ export class LibraryService {
 
     const folder = join(
       this.downloadRoot,
-      `${manga.manga_name}$${mangaId}`,
+      mangaFolderName(manga.manga_name, mangaId),
     );
 
     try {

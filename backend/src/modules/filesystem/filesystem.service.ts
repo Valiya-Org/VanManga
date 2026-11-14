@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import { dirname, join } from 'path';
 import type { AppConfig } from '../../config/configuration';
+import { mangaDirName, mangaFolderName } from './manga-path';
 
 @Injectable()
 export class FilesystemService {
@@ -27,8 +28,11 @@ export class FilesystemService {
     mangaName: string,
     mangaId: string,
   ): Promise<{ outerDir: string; innerDir: string }> {
-    const outerDir = join(this.downloadRoot, `${mangaName}$${mangaId}`);
-    const innerDir = join(outerDir, mangaName);
+    const outerDir = join(
+      this.downloadRoot,
+      mangaFolderName(mangaName, mangaId),
+    );
+    const innerDir = join(outerDir, mangaDirName(mangaName));
     await this.ensureDir(innerDir);
     return { outerDir, innerDir };
   }

@@ -27,6 +27,9 @@ export class LibraryRepository implements OnModuleInit {
   private readonly logger = new Logger(LibraryRepository.name);
   private readonly libraryPath: string;
   private library: MangaLibrary = {};
+  /** Set once the file has been read (or created). Writes are refused
+   *  until then so an unloaded, empty library can never reach the disk. */
+  private loaded = false;
   private writeQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
@@ -40,27 +43,44 @@ export class LibraryRepository implements OnModuleInit {
     await this.load();
   }
 
+  /** Load the library, or create it when the file does not exist yet.
+   *
+   *  An unreadable or malformed file is fatal: the error propagates out of
+   *  onModuleInit and the app refuses to boot. Starting with an empty
+   *  library instead would let the next mutation overwrite the user's real
+   *  file with `{}`. (The Flask app crashed at import time in this case.) */
   private async load(): Promise<void> {
-    try {
-      if (!(await this.fsService.exists(this.libraryPath))) {
-        await this.fsService.ensureDir(dirname(this.libraryPath));
-        this.library = {};
-        await this.flushAtomic(this.library);
-        this.logger.log(`Created new manga library at ${this.libraryPath}`);
-        return;
-      }
-      this.library = await this.fsService.readJson<MangaLibrary>(
-        this.libraryPath,
-      );
-      this.logger.log(
-        `Loaded ${Object.keys(this.library).length} manga from ${this.libraryPath}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `Failed to load library at ${this.libraryPath}: ${(err as Error).message} — starting empty`,
-      );
+    if (!(await this.fsService.exists(this.libraryPath))) {
+      await this.fsService.ensureDir(dirname(this.libraryPath));
       this.library = {};
+      await this.flushAtomic(this.library);
+      this.loaded = true;
+      this.logger.log(`Created new manga library at ${this.libraryPath}`);
+      return;
     }
+
+    let parsed: unknown;
+    try {
+      parsed = await this.fsService.readJson<unknown>(this.libraryPath);
+    } catch (err) {
+      throw new Error(
+        `Cannot read manga library at ${this.libraryPath}: ${(err as Error).message}. ` +
+          'Refusing to start so the file is not overwritten; repair or restore it, then restart.',
+        { cause: err },
+      );
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(
+        `Manga library at ${this.libraryPath} is not a JSON object. ` +
+          'Refusing to start so the file is not overwritten; repair or restore it, then restart.',
+      );
+    }
+
+    this.library = parsed as MangaLibrary;
+    this.loaded = true;
+    this.logger.log(
+      `Loaded ${Object.keys(this.library).length} manga from ${this.libraryPath}`,
+    );
   }
 
   private async flushAtomic(snapshot: MangaLibrary): Promise<void> {
@@ -73,6 +93,9 @@ export class LibraryRepository implements OnModuleInit {
   /** Schedule a write so concurrent mutations serialise. */
   private mutate<T>(fn: (lib: MangaLibrary) => T | Promise<T>): Promise<T> {
     const next = this.writeQueue.then(async () => {
+      if (!this.loaded) {
+        throw new Error('Manga library is not loaded; refusing to write');
+      }
       const result = await fn(this.library);
       await this.flushAtomic(this.library);
       return result;

@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosError, AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import { DEFAULT_BROWSER_USER_AGENT } from '../../common/http/browser-user-agent';
 import type { AppConfig } from '../../config/configuration';
 import { CloudflareService } from '../cloudflare/cloudflare.service';
 import { FilesystemService } from '../filesystem/filesystem.service';
@@ -34,9 +35,7 @@ export class ImageDownloaderService {
    *  and the Python requestHeaders are empty, so axios would otherwise go
    *  out as `axios/x.y` and get a 403. A real CF UA (when active) overrides
    *  this. */
-  private readonly defaultUserAgent =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-    '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  private readonly defaultUserAgent = DEFAULT_BROWSER_USER_AGENT;
   /** Coordinates 429 backoff across concurrent image downloads in
    *  the same chapter — when one image hits 429, sibling downloads
    *  pause until the cooldown expires. Mirrors Error_dict[g_error_flag]

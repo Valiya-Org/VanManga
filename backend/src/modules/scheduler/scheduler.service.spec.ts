@@ -156,6 +156,14 @@ describe('SchedulerService Cloudflare monitor', () => {
     t.cleanup();
   });
 
+  it('probes with a browser User-Agent so a bot-blocking 403 is not mistaken for a challenge', async () => {
+    const t = setup([], { cfEnabled: true });
+    axiosGet.mockResolvedValue({ status: 200, data: 'ok' });
+    await t.svc.handleDailyScan();
+    const options = axiosGet.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(options.headers['User-Agent']).toMatch(/^Mozilla\/5\.0 /);
+  });
+
   it('resets CF state and removes the monitor once CF is gone', async () => {
     const t = setup([], { cfEnabled: true });
     axiosGet.mockResolvedValue({ status: 403, data: 'cf' });

@@ -191,6 +191,14 @@ describe('LibraryService.deleteManga', () => {
     expect(t.store.has('E8uHNgs8')).toBe(false);
   });
 
+  it('removes the on-disk folder of a manga whose name contains a slash', async () => {
+    const t = setup([stored({ manga_name: 'Fate / Strange Fake' })]);
+    await expect(t.svc.deleteManga('E8uHNgs8')).resolves.toBe(true);
+    expect(t.fsService.removeDir).toHaveBeenCalledWith(
+      join(DOWNLOAD_ROOT, 'Fate - Strange Fake$E8uHNgs8'),
+    );
+  });
+
   it('keeps the entry when the folder cannot be removed', async () => {
     const t = setup([stored()]);
     t.fsService.removeDir.mockRejectedValueOnce(new Error('EBUSY'));

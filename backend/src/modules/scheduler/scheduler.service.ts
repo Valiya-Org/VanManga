@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, Interval, SchedulerRegistry } from '@nestjs/schedule';
+import { DEFAULT_BROWSER_USER_AGENT } from '../../common/http/browser-user-agent';
 import type { AppConfig } from '../../config/configuration';
 import { CloudflareService } from '../cloudflare/cloudflare.service';
 import { DownloadService } from '../download/download.service';
@@ -84,6 +85,9 @@ export class SchedulerService implements OnModuleInit {
       const axios = (await import('axios')).default;
       const res = await axios.get(targetUrl, {
         timeout: 15_000,
+        // Without a browser UA Cloudflare answers 403 even when no
+        // challenge is active, which would read as "challenged" forever.
+        headers: { 'User-Agent': DEFAULT_BROWSER_USER_AGENT },
         validateStatus: () => true,
         maxRedirects: 5,
       });

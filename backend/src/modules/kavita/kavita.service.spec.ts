@@ -84,6 +84,16 @@ describe('KavitaService.scanFolder', () => {
     );
   });
 
+  it('uses the on-disk folder name when the manga name contains a slash', async () => {
+    const t = setup([], []);
+    await t.svc.handleDownloadCompleted({ mangaId: 'abc', mangaName: 'Fate / Strange Fake' });
+    expect(t.post).toHaveBeenCalledWith(
+      'http://kavita:5000/api/Library/scan-folder',
+      { apiKey: 'ADMINKEY', folderPath: '/manga/Fate - Strange Fake$abc' },
+      expect.anything(),
+    );
+  });
+
   it('a failed scan does not throw out of the download-completed handler', async () => {
     const t = setup([], []);
     t.post.mockImplementation((url: string) =>

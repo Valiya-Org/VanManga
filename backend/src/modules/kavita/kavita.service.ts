@@ -8,6 +8,7 @@ import {
   DOWNLOAD_COMPLETED,
   type DownloadCompletedEvent,
 } from '../../common/events/app.events';
+import { mangaFolderName } from '../filesystem/manga-path';
 import { LibraryRepository } from '../library/library.repository';
 
 /**
@@ -150,7 +151,7 @@ export class KavitaService {
           `${this.baseUrl}/api/Library/scan-folder`,
           {
             apiKey: this.adminApiKey,
-            folderPath: `/manga/${mangaName}$${mangaId}`,
+            folderPath: `/manga/${mangaFolderName(mangaName, mangaId)}`,
           },
           {
             headers: {
