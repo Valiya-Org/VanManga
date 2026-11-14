@@ -15,7 +15,7 @@ ScraperService                   scrape_cli.py
        └─ DGmangaSource ──exec──> └─ modules/MangaSite.py
        └─ <future sources>        └─ utils/* (CF, paths, etc.)
 
-DownloadService (in-memory FIFO queue)
+DownloadService (FIFO queue, persisted to queue.json)
 SearchCacheService (search candidates for lean add)
 LibraryService
 EventsGateway (Socket.IO)
@@ -42,6 +42,7 @@ unchanged:
 | Path in container | Contents | Env override |
 | --- | --- | --- |
 | `/vanmanga/eng_config/manga_library.json` | library | `LIBRARY_FILE` |
+| `/vanmanga/eng_config/queue.json` | pending downloads (next to the library) | `QUEUE_FILE` |
 | `/vanmanga/thumbnails` | cover images | `THUMBNAILS_DIR` |
 | `/downloaded` | downloaded chapters / zips | `DOWNLOAD_ROOT` |
 
@@ -55,10 +56,15 @@ docker run -d -p 5000:5000 \
   vanmanga
 ```
 
-Set `MANGA_BASE_URL` / `MANGA_BASE_WEBSOCKET_URL` to the public address.
-`MANGA_BASE_WEBSOCKET_URL` is also written into each newly added manga's
-`thumbnail` URL in the library (as Flask did); left unset, covers point at
-`http://localhost:5000`. All variables are listed in `.env.example`.
+Set `MANGA_BASE_URL` / `MANGA_BASE_WEBSOCKET_URL` to the public address
+(only the legacy frontend reads them, via `/js/config.js`). New library
+records store relative cover URLs and old absolute ones are normalised on
+read, so the domain is not baked into the library. Set `ADMIN_TOKEN` to
+require an `X-Admin-Token` header for deleting manga and re-zipping. All
+variables are listed in `.env.example`.
+
+The HTTP and Socket.IO contract for clients is `docs/api-contract.md`
+(Swagger at `/api/docs`).
 
 The container runs as the non-root `node` user (uid 1000). Volumes created
 by the old Flask container are root-owned; `chown -R 1000:1000` them once
@@ -139,8 +145,11 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
 - `src/modules/cloudflare` — FlareSolverr client + CF state. Replaces
   `utils/flaresolverr_bypasser.py`.
 - `src/modules/events` — Socket.IO gateway. Replaces all `socketio.emit`
-  calls in `main.py` (events: `downloading_info`, `response`,
-  `complete_info`, `scan_completed`, `dmca_alert`).
+  calls in `main.py`. Canonical events: `download_started`,
+  `download_progress`, `chapter_completed`, `download_completed`,
+  `queue_updated`, `scan_completed`, `dmca_alert`; the legacy
+  `downloading_info`, `response`, `complete_info` are still emitted
+  alongside until P4.
 - `src/modules/scraper` — IMangaSource interface, Python subprocess
   runner, source registry, DGmanga adapter. **Wraps** existing Python
   scrapers — does not reimplement them.
@@ -148,9 +157,11 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
   detection, pagination, full CRUD. Replaces `utils/make_manga_object.py`,
   `utils/duplicate_check.py`, `utils/lib_pagination.py` and the
   `DogeLibrary/Pagination/ShortLib/ChangeDownload/DeleteManga/...`
-  Flask resources in main.py. Routes are mounted under both
-  `/api/library/*` (new) and `/api/dogemanga/*` (legacy).
-- `src/modules/download` — in-memory FIFO queue (concurrency=1),
+  Flask resources in main.py. Canonical routes `/api/library/*`
+  (`library.controller.ts`); legacy `/api/dogemanga/*` in
+  `library-legacy.controller.ts`.
+- `src/modules/download` — FIFO queue (concurrency=1, persisted to
+  `queue.json`, restored on boot, same-kind tasks de-duplicated),
   image downloader (429 backoff + CF headers), per-task orchestrator
   (chapters → images → zip → library update → WebSocket events).
   Replaces `utils/TaskQueue.py`, `confirm_comic_task` /
@@ -162,8 +173,9 @@ Listens on `PORT` (default 5000), exposes everything under `/api`.
 - `src/modules/search-cache` — in-memory TTL/FIFO cache of search
   candidates keyed by `source:manga_id`, so `POST /api/library` can take
   just `{ manga_id, source, submit_sign }`; a miss answers `410
-  search-expired`. Search with `?thumb=url` returns cover URLs
-  (`/api/scraper/:source/search-thumbnail/:id`) instead of base64.
+  search-expired`. The canonical search returns cover URLs
+  (`/api/scraper/:source/search-thumbnail/:id`); only the legacy
+  `/api/dogemanga/search` returns base64.
 - `src/modules/kavita` — Kavita server integration. Authenticate via
   Plugin API, sync kavita_url into library (every 6h), trigger folder
   scan after download completes, proxy login/refresh-token for the

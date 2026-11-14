@@ -96,5 +96,6 @@
 
 ### T13 Swagger 装饰器与文档收尾
 
-- 各规范控制器 `@ApiTags`、`@ApiOperation`，受保护路由 `@ApiHeader`、旧路由 `deprecated: true`；规范 DTO `@ApiProperty`。
+- 各规范控制器 `@ApiTags`、`@ApiOperation`，受保护路由 `@ApiSecurity('admin-token')`；规范 DTO `@ApiProperty`。旧控制器用 `@ApiExcludeController()` 从文档中排除（实现中改定：比逐个标 deprecated 简单，旧接口已由契约第 5 节记录），`GET /api/kavita/status` 标 `deprecated`。
+- 装饰器随各任务的控制器一起加上，T13 只做文档收尾。
 - `docs/review/backend-parity.md` 回填 P2 处理结果；`.env.example` 加 `ADMIN_TOKEN`、`QUEUE_FILE`。
