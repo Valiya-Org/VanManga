@@ -2,7 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { spaFallback } from '../src/modules/frontend/spa-fallback';
+import { configureApp } from '../src/app.setup';
 
 describe('Frontend static serving (e2e)', () => {
   let app: NestExpressApplication;
@@ -12,15 +12,13 @@ describe('Frontend static serving (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleRef.createNestApplication<NestExpressApplication>();
+    app = moduleRef.createNestApplication<NestExpressApplication>({
+      bodyParser: false,
+    });
 
-    // Match production bootstrap (main.ts): global /api prefix with the SPA
-    // root and dynamic config excluded, and the SPA fallback registered
-    // before init so it sits ahead of Nest's 404 handler. The fallback is
-    // gated to extension-less paths, so /js/config.js still reaches the
-    // controller.
-    app.setGlobalPrefix('api', { exclude: ['/', 'js/config.js'] });
-    app.use(spaFallback);
+    // Same pipeline as production (main.ts): /api prefix with the SPA root
+    // and /js/config.js excluded, SPA fallback ahead of Nest's 404 handler.
+    configureApp(app);
     await app.init();
   });
 
