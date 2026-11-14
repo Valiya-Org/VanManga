@@ -143,8 +143,12 @@ export class DownloadOrchestratorService implements OnModuleInit {
     const patch: Partial<Manga> = {
       completed: true,
       serialization: meta.serialization,
-      updated_at: this.nowSeconds(),
     };
+    // updated_at drives "recently updated" ordering: only a run that brought
+    // something down moves it (a no-op run of an up-to-date manga must not).
+    if (total > 0 && failedCount < total) {
+      patch.updated_at = this.nowSeconds();
+    }
     if (!manga.completed) {
       patch.download_switch = meta.serialization;
     }
@@ -179,7 +183,8 @@ export class DownloadOrchestratorService implements OnModuleInit {
       failedCount = await this.processChapters(manga, sourceName, payload.chapters, {
         updateLastEpi: false,
       });
-      if (failedCount < total) {
+      // Same rule as runFullManga: only a run that downloaded something.
+      if (total > 0 && failedCount < total) {
         await this.library.patch(manga.manga_id, { updated_at: this.nowSeconds() });
       }
     } catch (err) {

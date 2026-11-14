@@ -209,6 +209,31 @@ describe('DownloadOrchestratorService — canonical socket events and updated_at
     expect(t.events.emitDownloadCompleted).not.toHaveBeenCalled();
   });
 
+  it('a run with no new chapters after the filter does not write updated_at', async () => {
+    const t = setup(
+      newManga({ completed: true, last_epi: 2, last_epi_name: '第2话', updated_at: 500 }),
+      ['第1话', '第2话'],
+    );
+    await t.runFull();
+    const patches = t.library.patch.mock.calls.map((c) => c[1] as Partial<Manga>);
+    expect(patches.some((p) => 'updated_at' in p)).toBe(false);
+    expect(t.record().updated_at).toBe(500);
+    expect(t.events.emitDownloadProgress).not.toHaveBeenCalled();
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'done', chapters_total: 0, chapters_failed: 0 }),
+    );
+  });
+
+  it('redownload where every chapter failed does not write updated_at', async () => {
+    const t = setup(
+      newManga({ completed: true, last_epi: 2, updated_at: 500 }),
+      ['第1话', '第2话'],
+      { chapterImages: [{ errorCode: 503 }] },
+    );
+    await t.runRedownload();
+    expect(t.record().updated_at).toBe(500);
+  });
+
   it('a chapter list blocked by Cloudflare ends the started run as failed', async () => {
     const t = setup(newManga(), ['a'], { getChapters: async () => ({ chapters: [], errorCode: 501 }) });
     await t.runFull();

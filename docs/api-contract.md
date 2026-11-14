@@ -117,7 +117,8 @@ interface Manga {
   download_switch: 0 | 1;
   /** 加入库的时间，unix 秒（可能带小数）。写入后永不修改。 */
   add_date: number;
-  /** 最近更新时间，unix 秒。最新话推进或一次下载完成时写入；
+  /** 最近更新时间，unix 秒。最新话推进时，或一次下载（full-manga / redownload）
+   *  结束且至少一个章节下载成功时写入；没有新章节、全部章节失败的运行不写。
    *  旧记录没有该字段时取 add_date。主页按它排序。 */
   updated_at: number;
   /** 抓取源名，旧记录缺省为 'dgmanga'。 */
