@@ -30,9 +30,13 @@ export async function callScraper<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err) {
-    if (err instanceof HttpException) throw err;
-    throw new ApiException(502, 'scraper-failed', { message: (err as Error).message });
+    throw toScraperFailure(err);
   }
+}
+
+export function toScraperFailure(err: unknown): HttpException {
+  if (err instanceof HttpException) return err;
+  return new ApiException(502, 'scraper-failed', { message: (err as Error).message });
 }
 
 /** Throw the canonical failure for a sentinel-carrying result. */
