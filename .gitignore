@@ -14,3 +14,6 @@ downloaded
 
 # local runtime data from the separate vanmanga-next project; never commit
 /next/
+
+# brainstorming visual companion sessions
+/.superpowers/
