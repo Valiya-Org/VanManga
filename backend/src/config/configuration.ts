@@ -1,4 +1,4 @@
-import { resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 
 export interface AppConfig {
   port: number;
@@ -11,6 +11,9 @@ export interface AppConfig {
     downloadRoot: string;
     libraryFile: string;
     thumbnailsDir: string;
+    /** Persisted download queue (QUEUE_FILE; default queue.json next to
+     *  the library file). */
+    queueFile: string;
   };
   concurrency: {
     workers: number;
@@ -71,6 +74,9 @@ export default (): AppConfig => {
   const kavitaExposeUrl = process.env.KAVITA_EXPOSE_URL ?? '';
   const kavitaApiKey = process.env.KAVITA_ADMIN_APIKEY ?? '';
   const flaresolverrUrl = process.env.FLARESOLVERR_URL ?? '';
+  const libraryFile = resolve(
+    process.env.LIBRARY_FILE ?? './eng_config/manga_library.json',
+  );
 
   return {
     port: parseInt(process.env.PORT ?? '5000', 10),
@@ -82,10 +88,11 @@ export default (): AppConfig => {
     },
     storage: {
       downloadRoot: resolve(process.env.DOWNLOAD_ROOT ?? './downloaded'),
-      libraryFile: resolve(
-        process.env.LIBRARY_FILE ?? './eng_config/manga_library.json',
-      ),
+      libraryFile,
       thumbnailsDir: resolve(process.env.THUMBNAILS_DIR ?? './thumbnails'),
+      queueFile: resolve(
+        process.env.QUEUE_FILE || join(dirname(libraryFile), 'queue.json'),
+      ),
     },
     concurrency: {
       workers: parseInt(process.env.NUMBER_OF_WORKERS ?? '2', 10),

@@ -22,3 +22,7 @@ export const MANGA_ADDED = 'manga.added';
 export interface MangaAddedEvent {
   mangaId: string;
 }
+
+/** Fired whenever the download queue changes (enqueue, start, finish).
+ *  Payload: QueueSnapshot. Listener: EventsGateway (→ `queue_updated`). */
+export const QUEUE_CHANGED = 'queue.changed';

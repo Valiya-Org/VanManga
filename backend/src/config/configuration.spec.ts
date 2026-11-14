@@ -1,3 +1,4 @@
+import { join, resolve, sep } from 'path';
 import configuration from './configuration';
 
 describe('configuration: kavita.enabled', () => {
@@ -31,6 +32,24 @@ describe('configuration: kavita.enabled', () => {
     ['nothing', {}],
   ])('is false with %s', (_label, env) => {
     expect(withKavita(env)).toBe(false);
+  });
+});
+
+describe('configuration: storage.queueFile', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('defaults to queue.json next to the library file', () => {
+    delete process.env.QUEUE_FILE;
+    process.env.LIBRARY_FILE = join(sep, 'data', 'cfg', 'manga_library.json');
+    expect(configuration().storage.queueFile).toBe(resolve(sep, 'data', 'cfg', 'queue.json'));
+  });
+
+  it('QUEUE_FILE overrides it', () => {
+    process.env.QUEUE_FILE = join(sep, 'elsewhere', 'q.json');
+    expect(configuration().storage.queueFile).toBe(resolve(sep, 'elsewhere', 'q.json'));
   });
 });
 
