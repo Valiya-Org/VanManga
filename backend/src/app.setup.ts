@@ -10,11 +10,14 @@ import { spaFallback } from './modules/frontend/spa-fallback';
  *  e2e suites so they exercise the production pipeline.
  *
  *  The app must be created with `bodyParser: false`: the built-in 100kb
- *  parser is replaced with the 25 MB limit docs/api-contract.md §1.3
- *  promises. */
+ *  parser is replaced with the 1 MB limit docs/api-contract.md §1.3
+ *  promises. The largest body is a re-download chapter list, which at
+ *  ~150 bytes per chapter can outgrow 100kb on a long series. */
+export const BODY_LIMIT = '1mb';
+
 export function configureApp(app: NestExpressApplication): void {
-  app.useBodyParser('json', { limit: '25mb' });
-  app.useBodyParser('urlencoded', { extended: true, limit: '25mb' });
+  app.useBodyParser('json', { limit: BODY_LIMIT });
+  app.useBodyParser('urlencoded', { extended: true, limit: BODY_LIMIT });
 
   // Same-origin by default: no CORS headers, so a foreign web page cannot
   // send JSON POSTs / DELETEs or read responses. CORS_ORIGINS opts in.

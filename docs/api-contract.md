@@ -82,7 +82,7 @@ type ApiErrorCode =
 
 客户端遇到表中没有的 `error` 字符串时，应按 HTTP 状态做通用处理。没有专门错误码的异常由过滤器按状态给缺省值：`bad-request`(400)、`unauthorized`(401)、`forbidden`(403)、`not-found`(404)、`conflict`(409)、`payload-too-large`(413)、`rate-limited`(429)、`internal-error`(500)，其余为 `http-<status>`。`internal-error` 不带 `message`（细节只写日志）。`scraper-failed`、`kavita-unreachable` 的 `message` 是固定的通用说明，不含上游细节（内部地址、抓取进程输出等只写日志）。
 
-任何接口的请求体都可能触发：请求体不是合法 JSON → `400 bad-request`（带 `message`）；请求体超过 25 MB → `413 payload-too-large`（不带 `message`）。
+任何接口的请求体都可能触发：请求体不是合法 JSON → `400 bad-request`（带 `message`）；请求体超过 1 MB → `413 payload-too-large`（不带 `message`）。
 
 ### 1.4 管理员口令
 

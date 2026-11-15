@@ -211,6 +211,24 @@ describe('Canonical API contract (e2e)', () => {
     expect(bad.body).toMatchObject({ code: 400, error: 'validation-failed' });
   });
 
+  it('accepts bodies up to 1 MB and answers 413 payload-too-large above it', async () => {
+    // A long re-download list is still parsed (and then rejected for its content).
+    const chapters = Array.from({ length: 2000 }, (_, i) => ({
+      index: i + 1,
+      title: `第${i + 1}话`,
+      url: `https://dogemanga.com/p/${'x'.repeat(100)}${i}`,
+    }));
+    const big = await http().post('/api/download/chapters').send({ manga_id: '-nope', chapters }).expect(404);
+    expect(big.body.error).toBe('manga-not-found');
+
+    const tooBig = await http()
+      .post('/api/download')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ manga_id: 'x'.repeat(1024 * 1024 + 1) }))
+      .expect(413);
+    expect(tooBig.body).toEqual({ code: 413, error: 'payload-too-large' });
+  });
+
   it('Swagger documents every canonical route and none of the legacy ones', async () => {
     const { buildSwaggerDocument } = await import('../src/swagger');
     const doc = buildSwaggerDocument(app);
