@@ -65,7 +65,10 @@ onUnmounted(() => {
           v-model="token"
           type="password"
           placeholder="管理员口令"
-          autocomplete="current-password"
+          autocomplete="one-time-code"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           autofocus
           class="w-full"
           :color="invalid ? 'error' : undefined"

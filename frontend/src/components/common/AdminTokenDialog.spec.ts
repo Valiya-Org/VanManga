@@ -79,4 +79,16 @@ describe('AdminTokenDialog', () => {
     expect(findButton('确认')?.disabled).toBe(true);
     await click(findButton('取消'));
   });
+
+  it('does not invite the browser to save the token', async () => {
+    await mountWithApp(AdminTokenDialog);
+    const session = useSessionStore();
+    server.reply(401, required);
+    void session.withAdmin(() => deleteManga('m1')).catch(() => {});
+    await flushPromises();
+    const input = document.querySelector<HTMLInputElement>('[data-testid="admin-token-input"] input, input[data-testid="admin-token-input"]')!;
+    expect(input.getAttribute('autocomplete')).toBe('one-time-code');
+    expect(input.hasAttribute('name')).toBe(false);
+    await click(findButton('取消'));
+  });
 });
