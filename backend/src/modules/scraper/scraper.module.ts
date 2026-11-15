@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { MANGA_SOURCE_TOKEN } from './interfaces/manga-source.interface';
 import { PythonRunnerService } from './python/python-runner.service';
 import { ScraperController } from './scraper.controller';
-import { ScraperLegacyController } from './scraper-legacy.controller';
 import { ScraperService } from './scraper.service';
 import { DGmangaSource } from './sources/dgmanga.source';
 import { SourceRegistryService } from './sources/source-registry.service';
@@ -19,7 +18,7 @@ import { SourceRegistryService } from './sources/source-registry.service';
 const sources = [DGmangaSource];
 
 @Module({
-  controllers: [ScraperController, ScraperLegacyController],
+  controllers: [ScraperController],
   providers: [
     PythonRunnerService,
     SourceRegistryService,

@@ -61,10 +61,6 @@ export class DownloadService {
     return this.queue.activeSummary();
   }
 
-  pending(): TaskSummaryDto[] {
-    return this.queue.pendingSummaries();
-  }
-
   snapshot(): QueueSnapshot {
     return this.queue.snapshot();
   }

@@ -82,7 +82,7 @@ function stored(overrides: Partial<Manga> = {}): Manga {
 }
 
 describe('LibraryService.addManga', () => {
-  it('lean add: resolves the candidate from the search cache and persists it', async () => {
+  it('resolves the candidate from the search cache and persists it', async () => {
     const t = setup();
     t.searchCache.putMany([candidate()]);
 
@@ -110,48 +110,25 @@ describe('LibraryService.addManga', () => {
     });
   });
 
-  it('lean add: returns expired and writes nothing when the candidate is not cached', async () => {
+  it('returns expired and writes nothing when the candidate is not cached', async () => {
     const t = setup();
-    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', submit_sign: '0' });
+    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', source: 'dgmanga', submit_sign: '0' });
     expect(out.status).toBe('expired');
     expect(t.repo.add).not.toHaveBeenCalled();
     expect(t.thumbnails.persistAndLink).not.toHaveBeenCalled();
   });
 
-  it('lean add: the cache is keyed by source', async () => {
+  it('the cache is keyed by source', async () => {
     const t = setup();
     t.searchCache.putMany([candidate({ source: 'dgmanga' })]);
     const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', source: 'other' });
     expect(out.status).toBe('expired');
   });
 
-  it('lean add: defaults source to dgmanga', async () => {
-    const t = setup();
-    t.searchCache.putMany([candidate()]);
-    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8' });
-    expect(out.status).toBe('added');
-  });
-
-  it('fields the client sends win over cached ones', async () => {
-    const t = setup();
-    t.searchCache.putMany([candidate()]);
-    await t.svc.addManga({ manga_id: 'E8uHNgs8', manga_name: 'Renamed' });
-    expect(t.store.get('E8uHNgs8')?.manga_name).toBe('Renamed');
-  });
-
-  it('full (legacy) add: works without any cache entry', async () => {
-    const t = setup();
-    const out = await t.svc.addManga({ ...candidate(), submit_sign: '0' });
-    expect(out.status).toBe('added');
-    expect(t.thumbnails.persistAndLink).toHaveBeenCalledWith(
-      expect.objectContaining({ thumbnail: 'QkFTRTY0' }),
-    );
-  });
-
   it('submit_sign=2: cancelled, writes nothing', async () => {
     const t = setup();
     t.searchCache.putMany([candidate()]);
-    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', submit_sign: '2' });
+    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', source: 'dgmanga', submit_sign: '2' });
     expect(out.status).toBe('cancelled');
     expect(t.repo.add).not.toHaveBeenCalled();
   });
@@ -159,7 +136,7 @@ describe('LibraryService.addManga', () => {
   it('already in library: exists, writes nothing', async () => {
     const t = setup([stored()]);
     t.searchCache.putMany([candidate()]);
-    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', submit_sign: '1' });
+    const out = await t.svc.addManga({ manga_id: 'E8uHNgs8', source: 'dgmanga', submit_sign: '1' });
     expect(out.status).toBe('exists');
     expect(t.repo.add).not.toHaveBeenCalled();
   });
@@ -170,12 +147,12 @@ describe('LibraryService.addManga', () => {
     ]);
     t.searchCache.putMany([candidate()]);
 
-    const first = await t.svc.addManga({ manga_id: 'E8uHNgs8', submit_sign: '0' });
+    const first = await t.svc.addManga({ manga_id: 'E8uHNgs8', source: 'dgmanga', submit_sign: '0' });
     expect(first.status).toBe('duplicate');
     expect(first.duplicates).toEqual(['A・S・Gグループフタコマ漫画劇場 2']);
     expect(t.repo.add).not.toHaveBeenCalled();
 
-    const forced = await t.svc.addManga({ manga_id: 'E8uHNgs8', submit_sign: '1' });
+    const forced = await t.svc.addManga({ manga_id: 'E8uHNgs8', source: 'dgmanga', submit_sign: '1' });
     expect(forced.status).toBe('added');
     expect(t.store.has('E8uHNgs8')).toBe(true);
   });

@@ -1,22 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import type { AddMangaDto } from '../dto';
+import type { SearchResultDto } from '../../scraper/dto';
 import type { Manga } from '../entities/manga.entity';
 
-/** A candidate with the descriptive fields guaranteed present (the add
- *  pipeline resolves them from the request or the search cache first). */
-type ResolvedCandidate = AddMangaDto & {
-  manga_name: string;
-  artist_name: string;
-  newest_epi: string;
-  thumbnail: string;
-};
-
 /** Replaces utils/make_manga_object.py:make_manga_object.
- *  Hydrates user-submitted candidate data into a fully-formed Manga
- *  with sensible defaults. */
+ *  Hydrates a search candidate (its `thumbnail` already rewritten to the
+ *  cover URL) into a fully-formed Manga with the default counters. */
 @Injectable()
 export class MangaFactoryService {
-  build(candidate: ResolvedCandidate): Manga {
+  build(candidate: SearchResultDto): Manga {
     const now = Date.now() / 1000; // unix seconds, mirrors utc_time.timestamp()
     return {
       manga_id: candidate.manga_id,

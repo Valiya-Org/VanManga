@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Controller,
   Get,
   NotFoundException,
@@ -69,15 +68,6 @@ class ProbeController {
     return body;
   }
 
-  @Get('dogemanga/conflict')
-  legacyConflict() {
-    throw new ConflictException({ data: false, code: 434 });
-  }
-
-  @Get('dogemanga/manga-nf')
-  legacyMangaNf() {
-    throw new MangaNotFoundException('m1');
-  }
 }
 
 describe('AllExceptionsFilter', () => {
@@ -177,24 +167,4 @@ describe('AllExceptionsFilter', () => {
     });
   });
 
-  describe('legacy /api/dogemanga/* keep the old structure', () => {
-    it('nests the thrown response under message', async () => {
-      const res = await http().get('/api/dogemanga/conflict').expect(409);
-      expect(res.body).toEqual({
-        statusCode: 409,
-        timestamp: expect.any(String),
-        path: '/api/dogemanga/conflict',
-        message: { data: false, code: 434 },
-      });
-    });
-
-    it('errorCode-carrying exceptions look exactly like NotFoundException', async () => {
-      const res = await http().get('/api/dogemanga/manga-nf').expect(404);
-      expect(res.body.message).toEqual({
-        message: 'Unknown manga: m1',
-        error: 'Not Found',
-        statusCode: 404,
-      });
-    });
-  });
 });

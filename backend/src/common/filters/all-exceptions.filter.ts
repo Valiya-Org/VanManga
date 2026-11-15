@@ -9,9 +9,6 @@ import {
 import { Request, Response } from 'express';
 import { ApiException, errorCodeOf } from '../http/api-exception';
 
-/** Legacy routes keep the pre-P2 error structure until P4 deletes them. */
-const LEGACY_PREFIX = '/api/dogemanga/';
-
 const DEFAULT_ERRORS: Record<number, string> = {
   400: 'bad-request',
   401: 'unauthorized',
@@ -71,22 +68,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(
         `${log}: ${exception instanceof Error ? exception.message : String(exception)}`,
       );
-    }
-
-    const url = request.originalUrl ?? request.url;
-    if (url.startsWith(LEGACY_PREFIX)) {
-      response.status(status).json({
-        statusCode: status,
-        timestamp: new Date().toISOString(),
-        path: request.url,
-        message:
-          exception instanceof HttpException
-            ? exception.getResponse()
-            : exception instanceof Error
-              ? exception.message
-              : 'Unknown error',
-      });
-      return;
     }
 
     response.status(status).json(this.canonical(exception, status));

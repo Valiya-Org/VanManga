@@ -11,8 +11,7 @@ export function buildSwaggerDocument(app: INestApplication): OpenAPIObject {
     .setDescription(
       'Canonical routes (/api/library, /api/download, /api/scraper, /api/kavita, ' +
         '/api/config) answer { code, data } on success and { code, error, message?, data? } ' +
-        'on failure, with code equal to the HTTP status. See docs/api-contract.md. ' +
-        'Legacy /api/dogemanga/* routes are deprecated and removed in P4.',
+        'on failure, with code equal to the HTTP status. See docs/api-contract.md.',
     )
     .setVersion('0.2.0')
     .addTag('config', 'Runtime configuration for the SPA')
@@ -20,7 +19,6 @@ export function buildSwaggerDocument(app: INestApplication): OpenAPIObject {
     .addTag('download', 'Download queue')
     .addTag('scraper', 'Manga source scraping')
     .addTag('kavita', 'Kavita reader integration')
-    .addTag('legacy', 'Deprecated /api/dogemanga/* routes (removed in P4)')
     .addApiKey({ type: 'apiKey', in: 'header', name: ADMIN_TOKEN_HEADER }, 'admin-token')
     .build();
   return SwaggerModule.createDocument(app, config);

@@ -28,7 +28,7 @@ export class ScraperController {
   }
 
   /** Each result's `thumbnail` is a URL to the cached-cover endpoint below;
-   *  the base64 cover only travels on the legacy route. */
+   *  the base64 cover stays in the search cache. */
   @Get(':source/search')
   @ApiOperation({ summary: 'Search a source; no results is 200 []' })
   @ApiQuery({ name: 'q', required: true })

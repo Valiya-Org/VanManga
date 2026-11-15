@@ -17,9 +17,7 @@ export class ApiException extends HttpException {
   }
 }
 
-/** Thrown by shared services. The response body is exactly what a plain
- *  NotFoundException(message) produced before P2, so legacy routes see no
- *  change; canonical routes read `errorCode`. */
+/** Thrown by shared services; the global filter reads `errorCode`. */
 export class MangaNotFoundException extends NotFoundException {
   readonly errorCode = 'manga-not-found';
 
