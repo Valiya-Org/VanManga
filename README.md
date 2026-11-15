@@ -21,7 +21,7 @@ VanManga 是一个自托管的漫画抓取与管理服务：从漫画源（目�
 - 每天 01:30 扫描漫画库：未下完的继续下载，连载中的检查新章节；启动时也会扫描一次
 - 重新下载指定章节；整个下载目录重新打包（rezip）
 - 自动更新开关、删除漫画（连同下载目录）
-- 源站报告 DMCA 下架时，自动把该漫画移出漫画库
+- 源站报告 DMCA 下架时，自动把该漫画移出漫画库，**并删除它的下载目录**（与手动删除相同；需要保留文件请先备份）
 - Kavita：每 6 小时同步一次 Kavita 系列链接，下载完成后请求 Kavita 扫描对应目录；代理 Kavita 登录
 - FlareSolverr：检测到 Cloudflare 拦截时借助 FlareSolverr 通过检查，并每 12 分钟复查一次
 - 可选的管理员口令（`ADMIN_TOKEN`）保护删除和重新打包
@@ -177,7 +177,7 @@ VanManga is a self-hosted manga scraper and library manager. It searches a manga
 - Daily library scan at 01:30 (and once at startup): unfinished manga resume, ongoing series are checked for new chapters
 - Re-download selected chapters; re-zip the whole download folder
 - Per-manga auto-update switch; delete a manga together with its download folder
-- When the source reports a DMCA takedown, the manga is removed from the library
+- When the source reports a DMCA takedown, the manga is removed from the library **together with its download folder** (the same as a manual delete; back the files up if you want to keep them)
 - Kavita: series links synced every 6 hours, a folder scan requested after each download, Kavita login proxied
 - FlareSolverr: gets past Cloudflare challenges when one is detected, re-checking every 12 minutes
 - Optional admin token (`ADMIN_TOKEN`) protecting delete and re-zip
