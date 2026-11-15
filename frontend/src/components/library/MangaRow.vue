@@ -13,6 +13,7 @@ const props = defineProps<{ manga: Manga }>();
 const status = useMangaStatus(() => props.manga.manga_id);
 const { relative } = useRelativeTime();
 const autoUpdate = computed(() => isAutoUpdate(props.manga));
+const updated = computed(() => relative(mangaUpdatedAt(props.manga)));
 </script>
 
 <template>
@@ -26,6 +27,7 @@ const autoUpdate = computed(() => isAutoUpdate(props.manga));
       <div v-if="status.kind === 'downloading'" class="mt-1 flex items-center gap-2 text-xs text-vm-muted">
         <ProgressBar
           class="max-w-48"
+          :label="`《${manga.manga_name}》下载进度`"
           :done="status.progress?.done ?? 0"
           :total="status.progress?.total ?? null"
         />
@@ -39,8 +41,11 @@ const autoUpdate = computed(() => isAutoUpdate(props.manga));
         <span v-else>尚未下载</span>
         <template v-if="status.kind === 'queued'"> · 排队中 · 第 {{ status.position }} 位</template>
       </p>
+      <!-- Phones: the time gets its own line so truncation never hides it. -->
+      <p class="text-xs text-vm-muted sm:hidden" data-testid="row-updated-phone">{{ updated }}</p>
     </div>
-    <span class="hidden shrink-0 text-xs text-vm-muted sm:inline">{{ relative(mangaUpdatedAt(manga)) }}</span>
+    <!-- From sm up the time has its own column. -->
+    <span class="hidden shrink-0 text-xs text-vm-muted sm:inline">{{ updated }}</span>
     <span
       class="shrink-0 rounded-full border px-2 py-0.5 text-xs"
       :class="autoUpdate ? 'border-vm-accent/50 text-vm-accent' : 'border-vm-divider text-vm-muted'"

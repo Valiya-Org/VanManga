@@ -51,6 +51,10 @@ describe('LibraryView', () => {
     await click(findButton('列表'));
     expect(wrapper.find('[data-testid="library-list"]').exists()).toBe(true);
     expect(wrapper.findAll('[data-testid^="manga-row-"]')).toHaveLength(2);
+    // Phones keep the update time on its own line (hidden from sm up).
+    const phoneTime = wrapper.findAll('[data-testid="row-updated-phone"]');
+    expect(phoneTime).toHaveLength(2);
+    expect(phoneTime[0].text()).not.toBe('');
     expect(localStorage.getItem(LIBRARY_VIEW_STORAGE_KEY)).toBe('list');
   });
 

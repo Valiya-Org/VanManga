@@ -28,25 +28,27 @@ const downloaded = computed(() => props.manga.last_epi_name !== '');
       <CoverImage :src="manga.thumbnail" :title="manga.manga_name" class="h-full w-full" />
       <span
         v-if="isNew"
-        class="vm-gradient-bg absolute top-2 left-2 rounded-full px-2 py-0.5 text-xs font-semibold text-white"
+        class="vm-gradient-bg absolute top-2 left-2 rounded-full px-2 py-0.5 text-xs font-semibold text-vm-text"
         data-testid="badge-new"
       >新</span>
       <span
         v-if="autoUpdate"
-        class="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-vm-text backdrop-blur-sm"
+        class="absolute top-2 right-2 rounded-full bg-vm-bg/70 px-2 py-0.5 text-xs text-vm-text backdrop-blur-sm"
         title="自动更新已开启"
         data-testid="badge-auto"
       >自动</span>
       <div
         v-if="status.kind !== 'idle'"
-        class="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-black/85 to-transparent px-2 pt-6 pb-2 text-xs text-white"
+        class="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-vm-bg/90 to-transparent px-2 pt-6 pb-2 text-xs text-vm-text"
         data-testid="card-overlay"
       >
         <template v-if="status.kind === 'downloading'">
           <p>
             {{ status.progress?.total ? `下载中 ${status.progress.done} / ${status.progress.total} 话` : '下载中' }}
           </p>
-          <ProgressBar :done="status.progress?.done ?? 0" :total="status.progress?.total ?? null" />
+          <ProgressBar
+            :label="`《${manga.manga_name}》下载进度`"
+            :done="status.progress?.done ?? 0" :total="status.progress?.total ?? null" />
         </template>
         <p v-else>排队中 · 第 {{ status.position }} 位</p>
       </div>
