@@ -214,44 +214,51 @@ export class TaskQueueService implements OnModuleInit {
     await fs.rename(tmp, this.file);
   }
 
-  /** A missing file is an empty queue. A corrupt one is renamed to
-   *  queue.json.corrupt-<unix-seconds> (kept as evidence) and ignored:
-   *  unlike the library, losing the queue only loses work the next boot
-   *  scan re-queues anyway. Entries of the wrong shape are dropped, and
-   *  duplicates (same id, or the same task as an earlier entry) are
-   *  folded into the first, each with a log line. */
+  /** A missing file is an empty queue. One that cannot be read, is not
+   *  JSON, or is JSON of the wrong shape / version is renamed to
+   *  queue.json.corrupt-<unix-seconds> (kept as evidence, so the next write
+   *  cannot overwrite it) and ignored: unlike the library, losing the queue
+   *  only loses work the next boot scan re-queues anyway (full-manga tasks;
+   *  re-downloads can be re-submitted from the kept file). Entries of the
+   *  wrong shape are dropped, and duplicates (same id, or the same task as
+   *  an earlier entry) are folded into the first, each with a log line. */
   private readPersisted(): TaskHandle[] {
     let raw: string;
     try {
       raw = readFileSync(this.file, 'utf8');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        this.logger.warn(`Cannot read ${this.file}: ${(err as Error).message}; starting with an empty queue`);
+        // e.g. EACCES after the container's uid change
+        this.keepAside(`cannot be read (${(err as Error).message})`);
       } else {
         mkdirSync(dirname(this.file), { recursive: true });
       }
       return [];
     }
 
-    let parsed: Partial<PersistedQueue>;
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(raw) as Partial<PersistedQueue>;
+      parsed = JSON.parse(raw);
     } catch (err) {
       // Writes are not fsynced, so a power loss can leave a zero-length
       // file; that lands here too, and the boot scan re-queues the work.
-      const kept = `${this.file}.corrupt-${Math.floor(Date.now() / 1000)}`;
-      try {
-        renameSync(this.file, kept);
-      } catch (renameErr) {
-        this.logger.error(`Could not move ${this.file} aside: ${(renameErr as Error).message}`);
-      }
-      this.logger.warn(
-        `${this.file} is not valid JSON (${(err as Error).message}); kept as ${kept}, starting with an empty queue`,
-      );
+      this.keepAside(`is not valid JSON (${(err as Error).message})`);
       return [];
     }
 
-    const entries: unknown[] = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    const queue = parsed as Partial<PersistedQueue> | null;
+    if (
+      !queue ||
+      typeof queue !== 'object' ||
+      Array.isArray(queue) ||
+      queue.version !== 1 ||
+      !Array.isArray(queue.tasks)
+    ) {
+      this.keepAside('is not a version-1 queue file');
+      return [];
+    }
+
+    const entries: unknown[] = queue.tasks;
     const handles: TaskHandle[] = [];
     const ids = new Set<string>();
     for (const entry of entries) {
@@ -282,6 +289,19 @@ export class TaskQueueService implements OnModuleInit {
       });
     }
     return handles;
+  }
+
+  private keepAside(reason: string): void {
+    const kept = `${this.file}.corrupt-${Math.floor(Date.now() / 1000)}`;
+    try {
+      renameSync(this.file, kept);
+      this.logger.warn(`${this.file} ${reason}; kept as ${kept}, starting with an empty queue`);
+    } catch (renameErr) {
+      this.logger.error(
+        `${this.file} ${reason}, and could not be moved aside ` +
+          `(${(renameErr as Error).message}); starting with an empty queue`,
+      );
+    }
   }
 
   private isValidEntry(e: unknown): e is PersistedQueue['tasks'][number] {

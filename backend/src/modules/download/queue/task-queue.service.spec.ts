@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { QUEUE_CHANGED } from '../../../common/events/app.events';
@@ -307,6 +307,40 @@ describe('TaskQueueService', () => {
         q.enqueue({ kind: TaskKind.FULL_MANGA, mangaId: 'a' });
         await q.flushPersistence();
         expect(readFileSync(kept, 'utf8')).toBe('{ not json');
+      } finally {
+        jest.restoreAllMocks();
+      }
+    });
+
+    it.each([
+      ['an array', '[]'],
+      ['an object without tasks', '{}'],
+      ['another version', JSON.stringify({ version: 2, tasks: [] })],
+      ['null', 'null'],
+    ])('moves a queue.json that is %s aside instead of overwriting it later', async (_label, body) => {
+      jest.spyOn(Date, 'now').mockReturnValue(1_800_000_000_500);
+      try {
+        writeFileSync(file, body);
+        const q = make();
+        expect(q.snapshot()).toEqual({ active: null, pending: [] });
+        const kept = `${file}.corrupt-1800000000`;
+        expect(readFileSync(kept, 'utf8')).toBe(body);
+        q.enqueue({ kind: TaskKind.FULL_MANGA, mangaId: 'a' });
+        await q.flushPersistence();
+        expect(readFileSync(kept, 'utf8')).toBe(body);
+      } finally {
+        jest.restoreAllMocks();
+      }
+    });
+
+    it('moves an unreadable queue.json aside (non-ENOENT read error)', () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1_800_000_000_500);
+      try {
+        // a directory in its place makes readFileSync fail with EISDIR
+        mkdirSync(file);
+        writeFileSync(join(file, 'marker'), 'x');
+        expect(make().snapshot()).toEqual({ active: null, pending: [] });
+        expect(existsSync(join(`${file}.corrupt-1800000000`, 'marker'))).toBe(true);
       } finally {
         jest.restoreAllMocks();
       }
