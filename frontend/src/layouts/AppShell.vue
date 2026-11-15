@@ -87,7 +87,7 @@ watch(
           v-if="queue.count > 0"
           class="vm-gradient-btn hidden shrink-0 md:inline-flex"
           icon="i-lucide-download"
-          :aria-label="`下载队列，${queue.count} 个任务`"
+          :aria-label="`队列 ${queue.count}（下载任务）`"
           data-testid="queue-button"
           @click="ui.queueOpen = true"
         >
@@ -99,7 +99,7 @@ watch(
           color="neutral"
           variant="outline"
           icon="i-lucide-download"
-          aria-label="下载队列"
+          aria-label="队列（没有下载任务）"
           data-testid="queue-button"
           @click="ui.queueOpen = true"
         >
@@ -146,6 +146,7 @@ watch(
         type="button"
         class="flex flex-col items-center gap-0.5 py-2 text-xs"
         :class="ui.queueOpen ? 'text-vm-text' : 'text-vm-muted'"
+        :aria-label="queue.count > 0 ? `队列 ${queue.count}（下载任务）` : '队列'"
         data-testid="queue-tab"
         @click="ui.queueOpen = true"
       >
