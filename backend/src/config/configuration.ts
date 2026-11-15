@@ -52,6 +52,10 @@ export interface AppConfig {
   security: {
     /** ADMIN_TOKEN; '' disables protection of destructive routes. */
     adminToken: string;
+    /** CORS_ORIGINS: origins allowed to call the API and the socket
+     *  cross-origin. Empty (the default) sends no CORS headers at all —
+     *  the SPA is served from the same origin. */
+    corsOrigins: string[];
   };
   python: {
     /** Python interpreter — default `python` on PATH. */
@@ -116,6 +120,10 @@ export default (): AppConfig => {
     },
     security: {
       adminToken: (process.env.ADMIN_TOKEN ?? '').trim(),
+      corsOrigins: (process.env.CORS_ORIGINS ?? '')
+        .split(',')
+        .map((o) => o.trim())
+        .filter((o) => o.length > 0),
     },
     python: {
       executable: process.env.PYTHON_EXECUTABLE ?? 'python',

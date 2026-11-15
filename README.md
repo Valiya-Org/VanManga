@@ -124,6 +124,7 @@ cd frontend && npm test && npm run lint && npm run typecheck
 | `SEARCH_CACHE_TTL_MS` | `1800000` | | 搜索结果缓存时长（毫秒）。超过这个时间再添加，接口返回 `410 search-expired`，需重新搜索 |
 | `SEARCH_CACHE_MAX_ENTRIES` | `500` | | 搜索结果缓存条数上限，超出时先进先出 |
 | `ADMIN_TOKEN` | 空（关闭） | | 设置后，删除漫画（`DELETE /api/library/:id`）和重新打包（`POST /api/library/rezip`）需带请求头 `X-Admin-Token` |
+| `CORS_ORIGINS` | 空（关闭） | | 允许跨域访问 HTTP 接口和 Socket.IO 的来源，逗号分隔（如 `https://a.example,https://b.example`）。默认不发送任何 CORS 头：前端与后端同源，开发时 Vite 代理也不需要它 |
 | `KAVITA_BASE_URL` | 空 | | 后端访问 Kavita 的地址（如容器内网地址） |
 | `KAVITA_EXPOSE_URL` | 空 | | 浏览器访问 Kavita 的地址（登录链接、系列链接） |
 | `KAVITA_ADMIN_APIKEY` | 空 | | Kavita 管理员 API Key |
@@ -281,6 +282,7 @@ All optional. Relative paths resolve against the backend's working directory (`b
 | `SEARCH_CACHE_TTL_MS` | `1800000` | | How long search results stay cached (ms). Adding a manga later than this answers `410 search-expired`; search again |
 | `SEARCH_CACHE_MAX_ENTRIES` | `500` | | Maximum cached search results, evicted first-in first-out |
 | `ADMIN_TOKEN` | empty (off) | | When set, deleting a manga (`DELETE /api/library/:id`) and re-zipping (`POST /api/library/rezip`) require the `X-Admin-Token` header |
+| `CORS_ORIGINS` | empty (off) | | Comma-separated origins allowed to call the HTTP API and Socket.IO cross-origin (e.g. `https://a.example,https://b.example`). By default no CORS headers are sent: the frontend is same-origin, and the Vite dev proxy does not need it either |
 | `KAVITA_BASE_URL` | empty | | Kavita address the backend uses (e.g. the container network address) |
 | `KAVITA_EXPOSE_URL` | empty | | Kavita address browsers use (login links, series links) |
 | `KAVITA_ADMIN_APIKEY` | empty | | Kavita admin API key |

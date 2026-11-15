@@ -71,3 +71,22 @@ describe('configuration: security.adminToken', () => {
     expect(configuration().security.adminToken).toBe('s3cret');
   });
 });
+
+describe('configuration: security.corsOrigins', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('is empty (CORS off) when CORS_ORIGINS is unset or blank', () => {
+    delete process.env.CORS_ORIGINS;
+    expect(configuration().security.corsOrigins).toEqual([]);
+    process.env.CORS_ORIGINS = ' , ';
+    expect(configuration().security.corsOrigins).toEqual([]);
+  });
+
+  it('splits a comma-separated list', () => {
+    process.env.CORS_ORIGINS = 'http://a.example, http://b.example:8080';
+    expect(configuration().security.corsOrigins).toEqual(['http://a.example', 'http://b.example:8080']);
+  });
+});

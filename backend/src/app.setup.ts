@@ -1,4 +1,6 @@
+import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { CorsIoAdapter } from './common/security/cors-io.adapter';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { createValidationPipe } from './common/pipes/validation.pipe';
@@ -14,7 +16,14 @@ export function configureApp(app: NestExpressApplication): void {
   app.useBodyParser('json', { limit: '25mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '25mb' });
 
-  app.enableCors({ origin: true, credentials: true });
+  // Same-origin by default: no CORS headers, so a foreign web page cannot
+  // send JSON POSTs / DELETEs or read responses. CORS_ORIGINS opts in.
+  const corsOrigins =
+    app.get(ConfigService, { strict: false }).get<string[]>('security.corsOrigins') ?? [];
+  if (corsOrigins.length > 0) {
+    app.enableCors({ origin: corsOrigins, credentials: true });
+    app.useWebSocketAdapter(new CorsIoAdapter(app, corsOrigins));
+  }
 
   app.setGlobalPrefix('api');
 

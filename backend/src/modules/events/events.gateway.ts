@@ -22,7 +22,8 @@ import {
 /** Server → client broadcasts (docs/api-contract.md §4). Clients never
  *  send events. */
 @WebSocketGateway({
-  cors: { origin: true, credentials: true },
+  // No `cors` here: same-origin by default; CORS_ORIGINS opts in through
+  // CorsIoAdapter (app.setup.ts).
   transports: ['websocket', 'polling'],
 })
 export class EventsGateway

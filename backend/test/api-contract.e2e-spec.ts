@@ -187,6 +187,23 @@ describe('Canonical API contract (e2e)', () => {
     expect(res.body).toMatchObject({ code: 401, error: 'admin-token-required' });
   });
 
+  it('sends no CORS headers by default (HTTP preflight and Socket.IO)', async () => {
+    const preflight = await http()
+      .options('/api/library/-e2e1')
+      .set('Origin', 'http://evil.example')
+      .set('Access-Control-Request-Method', 'DELETE');
+    expect(preflight.headers['access-control-allow-origin']).toBeUndefined();
+
+    const get = await http().get('/api/library').set('Origin', 'http://evil.example').expect(200);
+    expect(get.headers['access-control-allow-origin']).toBeUndefined();
+
+    const socket = await http()
+      .get('/socket.io/?EIO=4&transport=polling')
+      .set('Origin', 'http://evil.example')
+      .expect(200);
+    expect(socket.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it('unknown routes and bad bodies use the failure envelope', async () => {
     const nf = await http().get('/api/no-such-route').expect(404);
     expect(nf.body).toMatchObject({ code: 404, error: 'not-found' });
