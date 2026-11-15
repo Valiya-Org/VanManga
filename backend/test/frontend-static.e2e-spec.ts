@@ -16,8 +16,8 @@ describe('Frontend static serving (e2e)', () => {
       bodyParser: false,
     });
 
-    // Same pipeline as production (main.ts): /api prefix with the SPA root
-    // and /js/config.js excluded, SPA fallback ahead of Nest's 404 handler.
+    // Same pipeline as production (main.ts): /api prefix, SPA fallback
+    // ahead of Nest's 404 handler.
     configureApp(app);
     await app.init();
   });
@@ -32,9 +32,17 @@ describe('Frontend static serving (e2e)', () => {
     expect(res.text).toMatch(/<div id="app"[^>]*>/);
   });
 
-  it('GET /js/config.js returns runtime config (not shadowed by SPA fallback)', async () => {
-    const res = await request(app.getHttpServer()).get('/js/config.js');
+  it('GET /some/client/route falls back to index.html', async () => {
+    const res = await request(app.getHttpServer()).get('/library/abc');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('window.MANGA_BASE_URL');
+    expect(res.text).toMatch(/<div id="app"[^>]*>/);
+  });
+
+  it('GET /js/config.js is gone (the SPA reads GET /api/config)', async () => {
+    await request(app.getHttpServer()).get('/js/config.js').expect(404);
+  });
+
+  it('a missing asset is a 404, not index.html', async () => {
+    await request(app.getHttpServer()).get('/assets/missing-abc.js').expect(404);
   });
 });

@@ -17,11 +17,9 @@ const STATIC_ROOT = resolve(
  *   rootPath = frontend/dist/         → index.html at the dist root
  *   assets   = frontend/dist/assets/  → hashed js/css/img bundles
  *
- * ServeStaticModule handles the static assets (assets/, favicon, etc.).
- * FrontendController handles:
- *   - GET /js/config.js   → dynamic env injection
- *   - GET /               → index.html
- *   - GET /*              → SPA fallback to index.html
+ * ServeStaticModule handles the static assets (assets/, favicon, etc.);
+ * `spaFallback` (app.setup.ts) answers GET / and client-side routes with
+ * index.html; FrontendController serves GET /api/config.
  */
 @Module({
   imports: [
@@ -29,8 +27,7 @@ const STATIC_ROOT = resolve(
     ServeStaticModule.forRoot({
       rootPath: STATIC_ROOT,
       exclude: ['/api{/*path}'],
-      // Don't serve index.html automatically — we handle SPA fallback
-      // in FrontendController to point at frontend/dist/index.html
+      // Don't serve index.html automatically — spaFallback does.
       serveStaticOptions: {
         index: false,
         fallthrough: true,

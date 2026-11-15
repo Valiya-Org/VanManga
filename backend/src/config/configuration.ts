@@ -3,10 +3,6 @@ import { dirname, join, resolve } from 'path';
 export interface AppConfig {
   port: number;
   nodeEnv: string;
-  frontend: {
-    baseUrl: string;
-    websocketUrl: string;
-  };
   storage: {
     downloadRoot: string;
     libraryFile: string;
@@ -81,11 +77,6 @@ export default (): AppConfig => {
   return {
     port: parseInt(process.env.PORT ?? '5000', 10),
     nodeEnv: process.env.NODE_ENV ?? 'development',
-    frontend: {
-      baseUrl: process.env.MANGA_BASE_URL ?? 'http://localhost:5000',
-      websocketUrl:
-        process.env.MANGA_BASE_WEBSOCKET_URL ?? 'http://localhost:5000',
-    },
     storage: {
       downloadRoot: resolve(process.env.DOWNLOAD_ROOT ?? './downloaded'),
       libraryFile,

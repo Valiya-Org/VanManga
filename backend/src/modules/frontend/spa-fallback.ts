@@ -6,9 +6,8 @@ import { STATIC_ROOT } from './frontend.module';
  * Express middleware: serve the SPA index.html for client-side routes only.
  *
  * Gated to extension-less GET paths that are not API or websocket routes.
- * This ensures real backend routes (e.g. /js/config.js) and hashed static
- * assets (e.g. /assets/index-abc.js) fall through to their own handlers
- * instead of being shadowed by index.html. Because the gate excludes any
+ * This ensures hashed static assets (e.g. /assets/index-abc.js) fall
+ * through to their own handlers instead of being shadowed by index.html. Because the gate excludes any
  * path with a file extension, the middleware can be registered before Nest
  * routes without intercepting them.
  */
