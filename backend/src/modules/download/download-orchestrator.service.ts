@@ -360,12 +360,6 @@ export class DownloadOrchestratorService implements OnModuleInit {
           last_epi_name: safeTitle,
           updated_at: this.nowSeconds(),
         });
-        // legacy 'response' — this manga's newest episode advanced.
-        this.events.emitResponse({
-          manga_id: manga.manga_id,
-          last_epi_name: safeTitle,
-          last_epi: chapter.index,
-        });
       }
     }
 
@@ -383,7 +377,6 @@ export class DownloadOrchestratorService implements OnModuleInit {
   // -------------------------------------------- run lifecycle events
 
   private announceStart(mangaId: string, kind: DownloadTaskKind): void {
-    this.events.emitDownloading(mangaId); // legacy
     this.events.emitDownloadStarted({ manga_id: mangaId, kind });
   }
 
@@ -395,7 +388,6 @@ export class DownloadOrchestratorService implements OnModuleInit {
     total: number,
     failed: number,
   ): void {
-    this.events.emitComplete({ manga_id: mangaId }); // legacy
     let manga: ApiManga | null;
     try {
       manga = toApiManga(this.library.get(mangaId));

@@ -1,15 +1,6 @@
-/** WebSocket payload shapes — docs/api-contract.md §4.
- *
- *  Two generations are emitted side by side until P4:
- *   - canonical events (download_started, download_progress,
- *     chapter_completed, download_completed, queue_updated, scan_completed,
- *     dmca_alert) for the new frontend;
- *   - legacy events (downloading_info, response, complete_info) with the
- *     snake_case keys the current frontend reads. */
+/** WebSocket payload shapes — docs/api-contract.md §4. */
 
 import type { ApiManga } from '../library/manga-view';
-
-// ------------------------------------------------------------- canonical
 
 export type DownloadTaskKind = 'full-manga' | 'redownload';
 
@@ -53,25 +44,7 @@ export interface DmcaAlertPayload {
   manga_name: string;
 }
 
-// ---------------------------------------------------------------- legacy
-
-/** 'response' — emitted when a manga's newest downloaded episode advances.
- *  (Flask emitted `newest_epi*` keys the frontend never read; these are the
- *  keys old MangaKu.vue `sockets.response` consumes.) */
-export interface ResponsePayload {
-  manga_id: string;
-  last_epi_name: string;
-  last_epi: number;
-}
-
-/** 'complete_info' — a manga finished its current download run.
- *  The frontend only reads `manga_id`. */
-export interface CompleteInfoPayload {
-  manga_id: string;
-}
-
-/** Event name constants. `downloading_info` carries a BARE manga_id
- *  string, matching the old handler `downloading_info(data){ let id = data }`. */
+/** Event name constants — the only events the server emits. */
 export const SOCKET_EVENTS = {
   DOWNLOAD_STARTED: 'download_started',
   DOWNLOAD_PROGRESS: 'download_progress',
@@ -80,10 +53,6 @@ export const SOCKET_EVENTS = {
   QUEUE_UPDATED: 'queue_updated',
   SCAN_COMPLETED: 'scan_completed',
   DMCA_ALERT: 'dmca_alert',
-  // legacy, removed in P4
-  DOWNLOADING: 'downloading_info',
-  RESPONSE: 'response',
-  COMPLETE: 'complete_info',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];

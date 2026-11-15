@@ -144,7 +144,10 @@ describe('Canonical API contract (e2e)', () => {
     expect(emitted('download_completed')).toContainEqual(
       expect.objectContaining({ manga_id: '-e2e1', kind: 'full-manga', status: 'done', chapters_total: 0 }),
     );
-    expect(emitted('downloading_info')).toContain('-e2e1'); // legacy still fires
+    // only the canonical events are broadcast
+    const { SOCKET_EVENTS } = await import('../src/modules/events/events.types');
+    const canonical: string[] = Object.values(SOCKET_EVENTS);
+    expect(socketEmit.mock.calls.map(([name]) => name).filter((n) => !canonical.includes(n))).toEqual([]);
     const queueUpdates = emitted('queue_updated');
     expect(queueUpdates.some((s) => (s.active as { mangaId?: string } | null)?.mangaId === '-e2e1')).toBe(true);
     expect(queueUpdates.at(-1)).toEqual({ active: null, pending: [] });

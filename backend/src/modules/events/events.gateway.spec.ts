@@ -1,5 +1,6 @@
 import type { Server } from 'socket.io';
 import { EventsGateway } from './events.gateway';
+import { SOCKET_EVENTS } from './events.types';
 
 describe('EventsGateway', () => {
   let gateway: EventsGateway;
@@ -11,25 +12,16 @@ describe('EventsGateway', () => {
     gateway.server = { emit } as unknown as Server;
   });
 
-  describe('legacy events (unchanged until P4)', () => {
-    it('emits downloading_info as a BARE manga_id string', () => {
-      gateway.emitDownloading('m1');
-      expect(emit).toHaveBeenCalledWith('downloading_info', 'm1');
-    });
-
-    it('emits response with { manga_id, last_epi_name, last_epi }', () => {
-      gateway.emitResponse({ manga_id: 'm1', last_epi_name: 'Chapter 5', last_epi: 5 });
-      expect(emit).toHaveBeenCalledWith('response', {
-        manga_id: 'm1',
-        last_epi_name: 'Chapter 5',
-        last_epi: 5,
-      });
-    });
-
-    it('emits complete_info with { manga_id }', () => {
-      gateway.emitComplete({ manga_id: 'm1' });
-      expect(emit).toHaveBeenCalledWith('complete_info', { manga_id: 'm1' });
-    });
+  it('knows exactly the seven canonical event names', () => {
+    expect(Object.values(SOCKET_EVENTS).sort()).toEqual([
+      'chapter_completed',
+      'dmca_alert',
+      'download_completed',
+      'download_progress',
+      'download_started',
+      'queue_updated',
+      'scan_completed',
+    ]);
   });
 
   describe('canonical events', () => {

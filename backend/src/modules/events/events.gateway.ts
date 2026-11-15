@@ -12,12 +12,10 @@ import { QUEUE_CHANGED } from '../../common/events/app.events';
 import type { QueueSnapshot } from '../download/queue/task.types';
 import {
   ChapterCompletedPayload,
-  CompleteInfoPayload,
   DmcaAlertPayload,
   DownloadCompletedPayload,
   DownloadProgressPayload,
   DownloadStartedPayload,
-  ResponsePayload,
   SOCKET_EVENTS,
 } from './events.types';
 
@@ -47,8 +45,6 @@ export class EventsGateway
     this.logger.debug(`client disconnected: ${client.id}`);
   }
 
-  // ------------------------------------------------------------ canonical
-
   emitDownloadStarted(payload: DownloadStartedPayload): void {
     this.emit(SOCKET_EVENTS.DOWNLOAD_STARTED, payload);
   }
@@ -77,23 +73,6 @@ export class EventsGateway
 
   emitDmcaAlert(payload: DmcaAlertPayload): void {
     this.emit(SOCKET_EVENTS.DMCA_ALERT, payload);
-  }
-
-  // --------------------------------------------------------------- legacy
-
-  /** 'downloading_info' with a BARE manga_id string. */
-  emitDownloading(mangaId: string): void {
-    this.emit(SOCKET_EVENTS.DOWNLOADING, mangaId);
-  }
-
-  /** 'response' — the newest downloaded episode advanced. */
-  emitResponse(payload: ResponsePayload): void {
-    this.emit(SOCKET_EVENTS.RESPONSE, payload);
-  }
-
-  /** 'complete_info' — a download run ended. */
-  emitComplete(payload: CompleteInfoPayload): void {
-    this.emit(SOCKET_EVENTS.COMPLETE, payload);
   }
 
   /** The queue can change during module init, before the server exists. */

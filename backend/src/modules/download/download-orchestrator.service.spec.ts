@@ -55,9 +55,6 @@ function setup(
     }),
   };
   const events = {
-    emitDownloading: jest.fn(),
-    emitResponse: jest.fn(),
-    emitComplete: jest.fn(),
     emitDmcaAlert: jest.fn(),
     emitDownloadStarted: jest.fn(),
     emitDownloadProgress: jest.fn(),
@@ -135,6 +132,12 @@ function setup(
     sleep,
     library,
     record: () => record,
+    /** The last_epi advances written to the library, in order. */
+    epiAdvances: () =>
+      library.patch.mock.calls
+        .map((c) => c[1] as Partial<Manga>)
+        .filter((p) => p.last_epi !== undefined)
+        .map((p) => ({ last_epi: p.last_epi, last_epi_name: p.last_epi_name })),
   };
 }
 
@@ -175,11 +178,7 @@ describe('DownloadOrchestratorService — canonical socket events and updated_at
       add_date: 1000,
       thumbnail: '/api/library/E8uHNgs8/thumbnail',
     });
-
-    // legacy events still fire alongside
-    expect(t.events.emitDownloading).toHaveBeenCalledWith('E8uHNgs8');
-    expect(t.events.emitResponse).toHaveBeenCalledTimes(2);
-    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('writes updated_at when last_epi advances and on completion, never touches add_date', async () => {
@@ -241,7 +240,7 @@ describe('DownloadOrchestratorService — canonical socket events and updated_at
     expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', chapters_total: 0 }),
     );
-    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('a DMCA chapter list deletes the manga, alerts and completes with manga: null', async () => {
@@ -264,7 +263,7 @@ describe('DownloadOrchestratorService — canonical socket events and updated_at
     expect(t.events.emitDownloadCompleted).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed' }),
     );
-    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('redownload: chapter_completed keeps last_epi, completion writes updated_at', async () => {
@@ -302,7 +301,7 @@ describe('DownloadOrchestratorService — chapter start spacing (F10)', () => {
 });
 
 describe('DownloadOrchestratorService — full manga download', () => {
-  it('records chapter 1 of a newly added manga and emits response', async () => {
+  it('records chapter 1 of a newly added manga', async () => {
     const t = setup(newManga(), ['第1话']);
     await t.runFull();
 
@@ -311,12 +310,8 @@ describe('DownloadOrchestratorService — full manga download', () => {
       last_epi_name: '第1话',
       completed: true,
     });
-    expect(t.events.emitResponse).toHaveBeenCalledWith({
-      manga_id: 'E8uHNgs8',
-      last_epi: 1,
-      last_epi_name: '第1话',
-    });
-    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+    expect(t.epiAdvances()).toEqual([{ last_epi: 1, last_epi_name: '第1话' }]);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('advances through every chapter of a new multi-chapter manga', async () => {
@@ -324,9 +319,7 @@ describe('DownloadOrchestratorService — full manga download', () => {
     await t.runFull();
 
     expect(t.record()).toMatchObject({ last_epi: 3, last_epi_name: '第3话' });
-    expect(t.events.emitResponse.mock.calls.map((c) => c[0].last_epi)).toEqual(
-      [1, 2, 3],
-    );
+    expect(t.epiAdvances().map((a) => a.last_epi)).toEqual([1, 2, 3]);
   });
 
   it('only records chapters past last_epi for an already-downloaded manga', async () => {
@@ -337,8 +330,7 @@ describe('DownloadOrchestratorService — full manga download', () => {
     await t.runFull();
 
     expect(t.record()).toMatchObject({ last_epi: 3, last_epi_name: '第3话' });
-    expect(t.events.emitResponse).toHaveBeenCalledTimes(1);
-    expect(t.events.emitResponse.mock.calls[0][0].last_epi).toBe(3);
+    expect(t.epiAdvances().map((a) => a.last_epi)).toEqual([3]);
   });
 });
 
@@ -389,7 +381,7 @@ describe('DownloadOrchestratorService — parity with the Flask pipeline', () =>
     expect(t.archive.zipChapter).not.toHaveBeenCalled();
     expect(t.fsService.removeDir).toHaveBeenCalledWith('/dl/inner/b');
     expect(t.record().last_epi).toBe(1);
-    expect(t.events.emitResponse).not.toHaveBeenCalled();
+    expect(t.epiAdvances()).toEqual([]);
   });
 
   it('still zips a chapter with fewer than 10 failed images', async () => {
@@ -411,7 +403,7 @@ describe('DownloadOrchestratorService — parity with the Flask pipeline', () =>
     expect(t.record().completed).toBe(false);
     expect(t.eventEmitter.emit).not.toHaveBeenCalled();
     // The UI still needs to leave its "downloading" state.
-    expect(t.events.emitComplete).toHaveBeenCalledTimes(1);
+    expect(t.events.emitDownloadCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('asks Kavita to rescan after a redownload', async () => {
