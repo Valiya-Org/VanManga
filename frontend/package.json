@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test:e2e": "playwright test --project=smoke",
+    "screenshots": "playwright test --project=screenshots"
   },
   "dependencies": {
     "@nuxt/ui": "^4.12.0",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@iconify-json/lucide": "^1.2.155",
+    "@playwright/test": "^1.56.1",
     "@types/node": "^22.10.7",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",

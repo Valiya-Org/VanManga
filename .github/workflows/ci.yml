@@ -54,6 +54,43 @@ jobs:
         run: npm ci && npm run build
       - run: npm run test:e2e
 
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Build backend
+        working-directory: backend
+        run: npm ci && npm run build
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      # Real backend (production entry dist/main.js) serving frontend/dist,
+      # with the fake scraper from frontend/e2e/ in place of scrape_cli.py.
+      - name: Smoke test
+        working-directory: frontend
+        env:
+          E2E_BACKEND_MAIN: '1'
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+
   scraper:
     name: Python scraper
     runs-on: ubuntu-latest
