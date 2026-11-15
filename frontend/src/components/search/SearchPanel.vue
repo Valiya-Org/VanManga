@@ -107,10 +107,12 @@ async function add(c: SearchCandidate): Promise<void> {
         ? 'bg-vm-surface'
         : 'bg-vm-surface ring-vm-divider top-20 -translate-y-0 max-w-3xl max-h-[calc(100dvh-6rem)]',
       header: 'gap-2 p-3 sm:px-4 min-h-0',
+      wrapper: 'sr-only',
       body: 'p-0 sm:p-0',
     }"
   >
-    <template #header="{ close }">
+    <!-- The title stays (visually hidden) as the dialog's accessible name. -->
+    <template #actions>
       <form class="flex flex-1 items-center gap-2" role="search" @submit.prevent="submit">
         <UInput
           v-model="query"
@@ -122,7 +124,7 @@ async function add(c: SearchCandidate): Promise<void> {
           data-testid="search-panel-input"
         />
       </form>
-      <UButton color="neutral" variant="ghost" trailing-icon="i-lucide-x" @click="close">
+      <UButton color="neutral" variant="ghost" trailing-icon="i-lucide-x" @click="open = false">
         关闭
       </UButton>
     </template>

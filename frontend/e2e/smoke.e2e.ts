@@ -3,6 +3,12 @@ import { ADMIN_TOKEN } from '../playwright.config';
 
 // search → add → appears in the library → delete (with the admin token) → gone
 test('search, add, then delete a manga with the admin token', async ({ page }) => {
+  const problems: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') problems.push(`${m.type()}: ${m.text()}`);
+  });
+  page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
+
   await page.goto('/');
   await expect(page.getByText('还没有漫画，在上方搜索并添加')).toBeVisible();
 
@@ -41,4 +47,7 @@ test('search, add, then delete a manga with the admin token', async ({ page }) =
 
   await expect(card).toHaveCount(0);
   await expect(page.getByText('还没有漫画，在上方搜索并添加')).toBeVisible();
+
+  // The expected 401s of the admin-token round trip are the only noise allowed.
+  expect(problems.filter((p) => !p.includes('401'))).toEqual([]);
 });
