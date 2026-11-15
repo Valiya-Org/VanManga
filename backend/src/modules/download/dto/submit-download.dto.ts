@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsInt,
+  IsNotEmpty,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -11,6 +12,7 @@ import {
 export class SubmitFullDownloadDto {
   @ApiProperty({ example: '-LoL2tSY' })
   @IsString()
+  @IsNotEmpty()
   manga_id!: string;
 }
 
@@ -23,6 +25,7 @@ export class ChapterPickDto {
 export class SubmitRedownloadDto {
   @ApiProperty({ example: '-LoL2tSY' })
   @IsString()
+  @IsNotEmpty()
   manga_id!: string;
 
   @ApiProperty({ type: [ChapterPickDto] })

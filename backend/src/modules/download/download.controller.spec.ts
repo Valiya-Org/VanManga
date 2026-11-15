@@ -77,6 +77,14 @@ describe('DownloadController (canonical)', () => {
     expect(bad.body.error).toBe('validation-failed');
   });
 
+  it.each([
+    ['/api/download', { manga_id: '' }],
+    ['/api/download/chapters', { manga_id: '', chapters: [{ index: 1, title: 't', url: 'u' }] }],
+  ])('POST %s with an empty manga_id → 400 validation-failed', async (path, body) => {
+    const res = await http().post(path).send(body).expect(400);
+    expect(res.body).toMatchObject({ code: 400, error: 'validation-failed' });
+  });
+
   it('POST /library/rezip', async () => {
     await http().post('/api/library/rezip').expect(200, { code: 200, data: { taskId: 't3' } });
   });
