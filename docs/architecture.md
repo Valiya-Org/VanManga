@@ -8,8 +8,9 @@
 - 前端数据层：[`frontend-data-layer.md`](frontend-data-layer.md)
 - 后端迁移审核：[`review/backend-parity.md`](review/backend-parity.md)
 - 人工测试清单：[`manual-test-checklist.md`](manual-test-checklist.md)
+- 逐方法说明（每个方法做什么、谁调用、复杂实现的解释）：后端与抓取器 [`architecture/backend.md`](architecture/backend.md)，前端 [`architecture/frontend.md`](architecture/frontend.md)
 
-本文按文件说明每一处代码做什么。测试文件（`*.spec.ts`）与被测文件同目录同名，只在第 6 节汇总，不逐个列出。
+本文是总览，按文件说明每一处代码做什么；具体到每个方法的说明在上面两份逐方法文档里。测试文件（`*.spec.ts`）与被测文件同目录同名，只在第 6 节汇总，不逐个列出。
 
 ## 1. 总览
 
@@ -147,8 +148,8 @@ NestJS 后端（backend/，一个进程，端口 5000）
 |---|---|
 | `download.controller.ts` | `POST /api/download` 整部下载；`POST /api/download/chapters` 重下指定章节；`POST /api/library/rezip` 重新打包（受口令保护）；`GET /api/download/queue` 队列快照；`GET /api/download/current` 当前任务；`GET /api/library/:id/chapters` 从源站取章节列表 |
 | `download.service.ts` | 对控制器的门面：校验漫画存在后入队；监听 `manga.added` 自动入队 |
-| `download-orchestrator.service.ts` | 单个任务的完整流程。整部下载：取元数据 → 章节列表 → 跳过已下载 → 下载 → 更新记录；重下：只处理选中的章节；重新打包：遍历下载目录。还负责：章节页 429 的等待重试、章节之间 2–5 秒的间隔、失败图片过多的章节整章放弃并删掉半成品目录、下架（DMCA）时删除漫画并推送 `dmca_alert`、章节名清理（为空或为 `.`/`..` 时回退成"第N话"）、任务开始与结束的 Socket 推送 |
-| `image-downloader.service.ts` | 下载一个章节的全部图片：可配置并发、每张之间的礼貌延迟、遇 429 时所有并发统一退避、长章节定时输出进度日志 |
+| `download-orchestrator.service.ts` | 单个任务的完整流程。整部下载：取元数据 → 章节列表 → 跳过已下载 → 下载 → 更新记录；重下：只处理选中的章节；重新打包：遍历下载目录。还负责：章节页 429 的等待重试、章节之间 2–5 秒的间隔、失败图片过多的章节整章放弃并删掉半成品目录、下架（DMCA，抓取器返回 504）时删除漫画并推送 `dmca_alert`——注意当前 Python 抓取器从不返回 504，下架页面会表现为 501，所以这条路径目前实际走不到、章节名清理（为空或为 `.`/`..` 时回退成"第N话"）、任务开始与结束的 Socket 推送 |
+| `image-downloader.service.ts` | 下载一个章节的全部图片：可配置并发、每张之间的礼貌延迟、遇 429 时统一退避（冷却时间挂在单例服务上，整个进程内所有正在下载的章节共用）、长章节定时输出进度日志 |
 | `chapter-title.ts` | 章节名改写规则，逐条对应旧的 `utils/chapter_title_reformat.py`（如 `第68-69话` → `第68-第69话`、`v2` → `v$2`），保证新旧压缩包命名一致，Kavita 才能正确解析 |
 | `queue/task-queue.service.ts` | 先进先出、并发为 1 的任务队列。入队去重（同一漫画的同类任务合并，重下任务合并章节）；每次变化写 `queue.json` 并发 `queue.changed`；启动时同步恢复队列，逐项校验，读不了或格式不对的文件改名留存 |
 | `queue/task.types.ts` | 任务种类（整部、重下、重新打包）、载荷、队列快照、对外的任务摘要 |
@@ -178,7 +179,7 @@ NestJS 后端（backend/，一个进程，端口 5000）
 
 | 文件 | 作用 |
 |---|---|
-| `scheduler.service.ts` | 启动时：后台做一次 Kavita 同步，再做启动扫描。启动扫描：先探测 Cloudflare，再倒序遍历库——首次下载没完成的入队；已下完且自动更新关闭（`download_switch` 为 1）的跳过；其余的问源站章节数，多于 `last_epi` 才入队；每部之间等 1 秒；扫描期间被删除的漫画跳过，任何错误都不会让进程退出。定时：每天 01:30 扫描；每 6 小时 Kavita 同步；检测到 Cloudflare 验证时注册一个每 12 分钟的复查，验证消失后注销 |
+| `scheduler.service.ts` | 启动时：后台做一次 Kavita 同步，再做启动扫描。启动扫描：先探测 Cloudflare，再倒序遍历库——首次下载没完成的入队；已下完且自动更新关闭（`download_switch` 为 1）的跳过；其余的问源站章节数，多于 `last_epi` 才入队；每次向源站查询章节数之后等 1 秒（直接入队或跳过的不等）；扫描期间被删除的漫画跳过，任何错误都不会让进程退出。定时：每天 01:30 扫描；每 6 小时 Kavita 同步；检测到 Cloudflare 验证时注册一个每 12 分钟的复查，验证消失后注销 |
 | `scheduler.module.ts` | 模块装配 |
 
 ### 3.8 外部服务
@@ -244,7 +245,7 @@ NestJS 后端（backend/，一个进程，端口 5000）
 | `src/main.ts` | 创建应用，安装 Pinia、路由、Nuxt UI |
 | `src/App.vue` | 根组件：调用 `useRealtime()`，渲染 `<UApp>` 与外壳 |
 | `src/router/index.ts` | 路由：`/` 漫画库、`/settings` 设置；旧地址 `/mainpage/*` 重定向到 `/` |
-| `src/layouts/AppShell.vue` | 外壳：顶栏（标志、搜索框、队列按钮、设置入口）、手机底部三个标签（漫画库、队列、设置）、实时连接断开提示；挂载所有浮层（搜索面板、队列抽屉、章节选择、确认框、口令框）；把下架、下载完成等服务端事件转成提示 |
+| `src/layouts/AppShell.vue` | 外壳：顶栏（标志、搜索框、队列按钮、设置入口）、手机底部三个标签（漫画库、队列、设置）、实时连接断开提示；挂载所有浮层（搜索面板、队列抽屉、章节选择、确认框、口令框）；把服务端事件转成提示：下架、下载失败、重新打包完成（下载成功不提示） |
 
 ### 5.3 接口层 `src/api/`
 
@@ -255,7 +256,7 @@ NestJS 后端（backend/，一个进程，端口 5000）
 | `errors.ts` | `ApiError`（`status`、`error`、`message`、`data`）及判断：口令错误、搜索过期、请求被取消 |
 | `endpoints.ts` | 每个接口一个带类型的函数：配置、抓取源、搜索、库的增删改、章节列表、下载、重新打包、队列、Kavita 登录 |
 | `manga.ts` | 对 `Manga` 的两个读取：`mangaUpdatedAt`（旧记录没有 `updated_at` 时用 `add_date`）、`isAutoUpdate`（`download_switch === 0` 表示开启） |
-| `index.ts` | 统一导出 |
+| `index.ts` | 统一导出（目前没有代码从它导入，各处直接引用具体文件） |
 
 ### 5.4 状态 `src/stores/`
 
@@ -327,3 +328,5 @@ NestJS 后端（backend/，一个进程，端口 5000）
 - Kavita 登录链接（含长期有效的 API Key）存在浏览器本地，存储方式待重新设计。
 - Socket.IO 的 WebSocket 通道不受跨域设置限制，其他网页可以连上并读到只读的进度广播。
 - 前端主 JS 文件约 572 kB，未做拆分。
+- 下架（DMCA）处理在后端和前端都已实现，但当前抓取器从不返回对应的 504 错误码，这条路径实际不会触发。
+- `modules/DGmanga.py` 里的 `generate_chapters_array`、`scrape_each_chapter`、`download_single_chapter`、`download_img` 迁移后不再被调用，但因抽象基类和顶部导入的关系不能直接删除。
