@@ -68,7 +68,7 @@ watch(
 
 <template>
   <div class="flex min-h-dvh flex-col">
-    <header class="sticky top-0 z-40 border-b border-vm-divider bg-vm-surface">
+    <header class="sticky top-0 z-40 border-b border-vm-divider bg-vm-surface" data-app-header>
       <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-4 sm:px-6">
         <BrandLogo />
         <form class="min-w-0 flex-1" role="search" @submit.prevent="submitSearch">

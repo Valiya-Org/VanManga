@@ -21,6 +21,8 @@
 }
 
 :root {
+  /* Bottom edge of the top bar (h-14 + border); SearchPanel measures it on open. */
+  --vm-search-top: 57px;
   --vm-gradient: linear-gradient(100deg, #00A4DC, #7B6FE0 55%, #AA5CC3);
   --vm-font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;

@@ -33,6 +33,22 @@ watch(open, (value) => {
   if (!value) props.search.cancel();
 });
 
+/**
+ * Desktop: the panel hangs from the bottom edge of the sticky top bar (which
+ * grows when the offline notice shows), and only the page below is dimmed.
+ * The edge is measured on open into `--vm-search-top` on <html>, because the
+ * dialog is teleported to <body>.
+ */
+watch(
+  open,
+  (value) => {
+    if (!value || typeof document === 'undefined') return;
+    const bottom = document.querySelector('[data-app-header]')?.getBoundingClientRect().bottom;
+    if (bottom) document.documentElement.style.setProperty('--vm-search-top', `${Math.round(bottom)}px`);
+  },
+  { immediate: true },
+);
+
 const adding = reactive(new Set<string>());
 /** Reported as already in the library without a record to show. */
 const knownInLibrary = reactive(new Set<string>());
@@ -104,9 +120,13 @@ async function add(c: SearchCandidate): Promise<void> {
     :fullscreen="mobile"
     :close="false"
     :ui="{
+      overlay: mobile ? undefined : 'top-(--vm-search-top)',
       content: mobile
         ? 'bg-vm-surface'
-        : 'bg-vm-surface ring-vm-divider top-20 -translate-y-0 max-w-3xl max-h-[calc(100dvh-6rem)]',
+        : 'bg-vm-surface ring-vm-divider top-(--vm-search-top) -translate-y-0 w-[calc(100vw-2rem)] max-w-5xl ' +
+          'rounded-t-none rounded-b-lg max-h-[calc(100dvh-var(--vm-search-top)-1rem)] ' +
+          'data-[state=open]:animate-[slide-in-from-top-and-fade_200ms_var(--ease-out)] ' +
+          'data-[state=closed]:animate-[slide-out-to-top-and-fade_200ms_var(--ease-out)]',
       header: 'gap-2 p-3 sm:px-4 min-h-0',
       wrapper: 'sr-only',
       body: 'p-0 sm:p-0',
