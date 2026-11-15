@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import ui from '@nuxt/ui/vite';
+import { uiOptions } from './ui.options';
 import { fileURLToPath, URL } from 'node:url';
 
 // Backend (NestJS) dev server
@@ -9,7 +10,7 @@ const BACKEND = 'http://localhost:5000';
 export default defineConfig({
   // Nuxt UI in plain Vue + Vite mode:
   // https://ui.nuxt.com/docs/getting-started/installation/vue
-  plugins: [vue(), ui()],
+  plugins: [vue(), ui(uiOptions)],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

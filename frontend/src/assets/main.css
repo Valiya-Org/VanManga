@@ -1,2 +1,71 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+/*
+ * VanManga palette — the single place where colours are defined.
+ * Fixed dark theme (index.html sets <html class="dark">); there is no light mode.
+ * The gradient is used in exactly four places: "Manga" in the logo, primary
+ * buttons, the "新" badge and progress bars.
+ */
+@theme static {
+  --color-vm-bg: #121218;      /* page */
+  --color-vm-surface: #191922; /* top bar / drawers / overlays */
+  --color-vm-card: #1D1D28;    /* cards */
+  --color-vm-divider: #2B2B3A; /* dividers */
+  --color-vm-text: #ECEBF5;    /* body text */
+  --color-vm-muted: #8C8AA3;   /* secondary text */
+  --color-vm-accent: #B9A4F5;  /* text accent (chapter names …) */
+  --color-vm-danger: #FF8FA3;  /* destructive actions */
+}
+
+:root {
+  --vm-gradient: linear-gradient(100deg, #00A4DC, #7B6FE0 55%, #AA5CC3);
+  --vm-font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+/* Map the palette onto Nuxt UI's design tokens. */
+.dark {
+  --ui-bg: var(--color-vm-bg);
+  --ui-bg-muted: var(--color-vm-card);
+  --ui-bg-elevated: var(--color-vm-surface);
+  --ui-bg-accented: var(--color-vm-divider);
+  --ui-border: var(--color-vm-divider);
+  --ui-border-muted: var(--color-vm-divider);
+  --ui-border-accented: #3a3a4d;
+  --ui-text: var(--color-vm-text);
+  --ui-text-highlighted: #ffffff;
+  --ui-text-toned: var(--color-vm-text);
+  --ui-text-muted: var(--color-vm-muted);
+  --ui-text-dimmed: var(--color-vm-muted);
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-vm-bg);
+  color: var(--color-vm-text);
+  font-family: var(--vm-font);
+}
+
+/* The four gradient uses. */
+.vm-gradient-text {
+  background: var(--vm-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.vm-gradient-bg {
+  background: var(--vm-gradient);
+}
+
+.vm-gradient-btn {
+  background: var(--vm-gradient);
+  color: #fff;
+  border: 0;
+}
+
+.vm-gradient-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
