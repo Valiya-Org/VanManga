@@ -32,6 +32,15 @@ beforeEach(() => {
 afterEach(() => server.restore());
 enableAutoUnmount(afterEach);
 
+/** Startup requests, in the order useRealtime() sends them. */
+function replyStartup(
+  config = { kavitaEnabled: false, kavitaExposeUrl: null, adminRequired: false },
+): void {
+  server.replyOnce(200, { code: 200, data: config });
+  server.replyOnce(200, { code: 200, data: [] });
+  server.replyOnce(200, { code: 200, data: { active: null, pending: [] } });
+}
+
 async function mountApp(path = '/') {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -50,10 +59,7 @@ describe('App shell', () => {
   });
 
   it('loads config, connects the socket once and routes events to stores', async () => {
-    server.reply(200, {
-      code: 200,
-      data: { kavitaEnabled: true, kavitaExposeUrl: 'http://k', adminRequired: true },
-    });
+    replyStartup({ kavitaEnabled: true, kavitaExposeUrl: 'http://k', adminRequired: true });
     await mountApp();
 
     expect(useConfigStore().adminRequired).toBe(true);
@@ -67,7 +73,7 @@ describe('App shell', () => {
   });
 
   it('loads library and queue at startup without waiting for the socket', async () => {
-    server.reply(200, { code: 200, data: [] });
+    replyStartup();
     await mountApp();
     const urls = server.requests.map((r) => r.url);
     expect(urls).toEqual(expect.arrayContaining(['config', 'library', 'download/queue']));
