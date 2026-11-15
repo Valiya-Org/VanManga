@@ -1,9 +1,9 @@
 # VanManga API 契约（规范接口）
 
-- 版本：P4（2026-11-14）
+- 版本：P4.1（2026-11-15）
 - 规格来源：`docs/superpowers/specs/2026-11-14-migration-completion-roadmap-design.md` 第 6 节
 - 适用对象：P3 新前端，以及任何新客户端。本文件足以写出类型化客户端，无需阅读后端源码。
-- 本文件描述的是服务端提供的全部接口。旧版前端用的 `/api/dogemanga/*`、旧 socket 事件名、`/js/config.js`、`GET /api/kavita/status` 已在 P4 删除（见末节）。
+- 本文件描述的是服务端提供的全部接口。旧版前端用的 `/api/dogemanga/*`、旧 socket 事件名、`/js/config.js`、`GET /api/kavita/status` 已在 P4 删除，`GET /api/library/short|search|paginate` 已在 P4.1 删除（见末节）。
 
 ## 1. 通用规则
 
@@ -304,13 +304,6 @@ type Data =
 
 完成时广播 `scan_completed`。
 
-#### 库内检索（新前端不需要；是否保留待定）
-
-- `GET /api/library/short` → `data: { manga_id: string; manga_name: string }[]`
-- `GET /api/library/search?query=<词>` → `data: Manga[]`（名字、作者或 id 包含该词；空词返回 `[]`）
-- `GET /api/library/paginate?start=<n>&limit=<n>`（均为 ≥1 的整数，默认 1、10）→
-  `data: { start: number; limit: number; count: number; previous: {start:number;limit:number} | ''; next: {start:number;limit:number} | ''; lib_paginate: Manga[] }`；参数非法 → `400 validation-failed`
-
 ### 3.4 下载队列
 
 队列单并发、先进先出，状态持久化到磁盘，重启后恢复（运行中被打断的任务回到队首）。
@@ -468,5 +461,6 @@ interface DmcaAlertEvent {
 
 - HTTP：`/api/dogemanga/*` 全部路由。对应的规范接口见第 3 节（搜索 → `GET /api/scraper/:source/search`，添加 → `POST /api/library`，删除 → `DELETE /api/library/:mangaId`，重下 → `POST /api/download/chapters`，队列 → `GET /api/download/queue` 等）。
 - `GET /api/kavita/status`：改用 `GET /api/config` 的 `kavitaEnabled`。
+- `GET /api/library/short`、`GET /api/library/search`、`GET /api/library/paginate`（P4.1 删除）：新旧前端都没有调用方；改用 `GET /api/library`，在客户端筛选、分页。
 - `GET /js/config.js`（`window.MANGA_BASE_URL`、`window.MANGA_BASE_WEBSOCKET_URL`）：改用 `GET /api/config`；环境变量 `MANGA_BASE_URL`、`MANGA_BASE_WEBSOCKET_URL` 随之作废，服务端不再读取。
 - Socket：`downloading_info`、`response`、`complete_info` 不再发送；改听第 4 节的 `download_started`、`chapter_completed`、`download_completed`。

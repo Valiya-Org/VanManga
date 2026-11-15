@@ -6,12 +6,11 @@ import {
   HttpCode,
   Param,
   Post,
-  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ApiOperation, ApiQuery, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { AdminTokenGuard } from '../../common/security/admin-token.guard';
 import type { Response } from 'express';
 import {
@@ -22,7 +21,7 @@ import { ApiException } from '../../common/http/api-exception';
 import { ok } from '../../common/http/envelope';
 import { TaskQueueService } from '../download/queue/task-queue.service';
 import { ThumbnailService } from '../filesystem/thumbnail.service';
-import { LeanAddMangaDto, PaginationQueryDto } from './dto';
+import { LeanAddMangaDto } from './dto';
 import { LibraryService } from './library.service';
 import { toApiManga } from './manga-view';
 import { sendThumbnail } from './send-thumbnail';
@@ -43,26 +42,6 @@ export class LibraryController {
   @ApiOperation({ summary: 'List the library (Manga[])' })
   list() {
     return ok(this.library.list().map(toApiManga));
-  }
-
-  @Get('short')
-  @ApiOperation({ summary: 'List { manga_id, manga_name } pairs' })
-  short() {
-    return ok(this.library.shortList());
-  }
-
-  @Get('paginate')
-  @ApiOperation({ summary: 'One page of the library' })
-  paginate(@Query() q: PaginationQueryDto) {
-    const page = this.library.paginate(q.start, q.limit);
-    return ok({ ...page, lib_paginate: page.lib_paginate.map(toApiManga) });
-  }
-
-  @Get('search')
-  @ApiOperation({ summary: 'Search within the library by name, artist or id' })
-  @ApiQuery({ name: 'query', required: false })
-  search(@Query('query') query?: string) {
-    return ok(this.library.searchInLibrary(query ?? '').map(toApiManga));
   }
 
   @Post()

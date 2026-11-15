@@ -39,9 +39,6 @@ describe('LibraryController (canonical /api/library)', () => {
   let app: INestApplication;
   const library = {
     list: jest.fn(() => [STORED]),
-    shortList: jest.fn(() => [{ manga_id: '-abc', manga_name: 'Name' }]),
-    paginate: jest.fn(() => ({ start: 1, limit: 10, count: 1, previous: '', next: '', lib_paginate: [STORED] })),
-    searchInLibrary: jest.fn(() => [STORED]),
     addManga: jest.fn(),
     toggleAutoUpdate: jest.fn(async () => 1),
     deleteManga: jest.fn(async () => true),
@@ -86,22 +83,12 @@ describe('LibraryController (canonical /api/library)', () => {
       await http().get('/api/library').expect(200, { code: 200, data: [VIEW] });
     });
 
-    it('GET /library/search and /library/paginate', async () => {
-      await http().get('/api/library/search?query=Na').expect(200, { code: 200, data: [VIEW] });
-      const res = await http().get('/api/library/paginate?start=1&limit=10').expect(200);
-      expect(res.body.data.lib_paginate).toEqual([VIEW]);
-    });
-
-    it('GET /library/paginate rejects bad params with 400 validation-failed', async () => {
-      const res = await http().get('/api/library/paginate?start=0').expect(400);
-      expect(res.body).toMatchObject({ code: 400, error: 'validation-failed' });
-    });
-
-    it('GET /library/short', async () => {
-      await http()
-        .get('/api/library/short')
-        .expect(200, { code: 200, data: [{ manga_id: '-abc', manga_name: 'Name' }] });
-    });
+    it.each(['/api/library/short', '/api/library/search?query=Na', '/api/library/paginate?start=1&limit=10'])(
+      'the removed %s answers 404',
+      async (path) => {
+        await http().get(path).expect(404);
+      },
+    );
   });
 
   describe('POST /library (lean add)', () => {

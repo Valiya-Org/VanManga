@@ -223,9 +223,6 @@ describe('Canonical API contract (e2e)', () => {
         'GET /api/config',
         'GET /api/library',
         'POST /api/library',
-        'GET /api/library/short',
-        'GET /api/library/paginate',
-        'GET /api/library/search',
         'POST /api/library/{mangaId}/auto-update',
         'DELETE /api/library/{mangaId}',
         'GET /api/library/{mangaId}/thumbnail',
@@ -244,6 +241,9 @@ describe('Canonical API contract (e2e)', () => {
     );
     expect(ops.filter((op) => op.includes('dogemanga'))).toEqual([]);
     expect(ops).not.toContain('GET /api/kavita/status');
+    for (const removed of ['short', 'paginate', 'search']) {
+      expect(ops).not.toContain(`GET /api/library/${removed}`);
+    }
 
     const security = (method: 'delete' | 'post', path: string) =>
       (doc.paths[path] as Record<string, { security?: unknown[] }>)[method].security;

@@ -6,7 +6,6 @@ import type { Manga } from './entities/manga.entity';
 import { LibraryService } from './library.service';
 import { DuplicateCheckService } from './services/duplicate-check.service';
 import { MangaFactoryService } from './services/manga-factory.service';
-import { PaginationService } from './services/pagination.service';
 
 const DOWNLOAD_ROOT = '/downloaded';
 
@@ -64,7 +63,6 @@ function setup(existing: Manga[] = []) {
     repo as never,
     new MangaFactoryService(),
     new DuplicateCheckService(),
-    new PaginationService(),
     thumbnails as never,
     fsService as never,
     searchCache,

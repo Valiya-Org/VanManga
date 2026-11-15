@@ -68,7 +68,7 @@ function errorMessage(err: unknown): string;     // 已知码 → 中文；未�
 
 🔒 = 只有这两个请求带 `X-Admin-Token`（请求配置 `adminProtected: true`，有口令时才附加；口令在发出请求的那一刻读取）。其他请求从不带口令。
 
-未封装：抓取调试接口、`library/short|search|paginate`、`kavita/status`（契约注明新前端不需要），以及 `POST /api/kavita/refreshtoken`：前端只用 `loginUrl`，从不使用 Kavita JWT，没有需要刷新的东西（契约只提供该接口，并不要求前端调用）。
+未封装：抓取调试接口（契约注明新前端不需要），以及 `POST /api/kavita/refreshtoken`：前端只用 `loginUrl`，从不使用 Kavita JWT，没有需要刷新的东西（契约只提供该接口，并不要求前端调用）。
 
 `Manga` 带索引签名 `[extra: string]: unknown`（旧记录的未知字段原样透传，不要依赖）。
 

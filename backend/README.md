@@ -54,8 +54,8 @@ SchedulerService (@Cron / @Interval)
   by `source:manga_id`, so `POST /api/library` takes just
   `{ manga_id, source, submit_sign }`.
 - `src/modules/library` — the `manga_library.json` repository (atomic
-  writes; refuses to boot on a corrupt file), duplicate detection,
-  pagination; routes `/api/library/*`.
+  writes; refuses to boot on a corrupt file), duplicate detection;
+  routes `/api/library/*`.
 - `src/modules/download` — FIFO queue (one task at a time, persisted to
   `queue.json`, restored and de-duplicated on boot), image downloader,
   per-task orchestrator; routes `/api/download/*`, `POST /api/library/rezip`

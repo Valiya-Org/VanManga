@@ -8,17 +8,11 @@ import { mangaFolderName } from '../filesystem/manga-path';
 import { ThumbnailService } from '../filesystem/thumbnail.service';
 import { SearchCacheService } from '../search-cache/search-cache.service';
 import type { SearchResultDto } from '../scraper/dto';
-import {
-  AddMangaInput,
-  DuplicateCheckResponseDto,
-  PaginationResultDto,
-  ShortMangaDto,
-} from './dto';
+import { AddMangaInput, DuplicateCheckResponseDto } from './dto';
 import type { Manga } from './entities/manga.entity';
 import { LibraryRepository } from './library.repository';
 import { DuplicateCheckService } from './services/duplicate-check.service';
 import { MangaFactoryService } from './services/manga-factory.service';
-import { PaginationService } from './services/pagination.service';
 
 export interface AddMangaOutcome {
   status: 'added' | 'duplicate' | 'cancelled' | 'exists' | 'expired';
@@ -35,7 +29,6 @@ export class LibraryService {
     private readonly repo: LibraryRepository,
     private readonly factory: MangaFactoryService,
     private readonly dedupe: DuplicateCheckService,
-    private readonly pagination: PaginationService,
     private readonly thumbnails: ThumbnailService,
     private readonly fsService: FilesystemService,
     private readonly searchCache: SearchCacheService,
@@ -50,29 +43,6 @@ export class LibraryService {
 
   list(): Manga[] {
     return this.repo.list();
-  }
-
-  shortList(): ShortMangaDto[] {
-    return this.repo.list().map((m) => ({
-      manga_id: m.manga_id,
-      manga_name: m.manga_name,
-    }));
-  }
-
-  paginate(start: number, limit: number): PaginationResultDto {
-    return this.pagination.paginate(this.repo.list(), start, limit);
-  }
-
-  /** Search-within-library — borrowed from 2.1-dev's /libsearch. */
-  searchInLibrary(query: string): Manga[] {
-    const q = query.trim();
-    if (q === '') return [];
-    return this.repo.list().filter(
-      (m) =>
-        m.manga_name.includes(q) ||
-        m.artist_name.includes(q) ||
-        m.manga_id.includes(q),
-    );
   }
 
   get(mangaId: string): Manga {
