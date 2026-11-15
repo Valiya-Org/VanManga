@@ -5,11 +5,12 @@ import { STATIC_ROOT } from './frontend.module';
 /**
  * Express middleware: serve the SPA index.html for client-side routes only.
  *
- * Gated to extension-less GET paths that are not API or websocket routes.
- * This ensures hashed static assets (e.g. /assets/index-abc.js) fall
- * through to their own handlers instead of being shadowed by index.html. Because the gate excludes any
- * path with a file extension, the middleware can be registered before Nest
- * routes without intercepting them.
+ * Gated to extension-less GET/HEAD paths that are not API or websocket
+ * routes. Any path with a file extension (e.g. /assets/index-abc.js,
+ * /js/config.js) is left to the static middleware and, when no such file
+ * exists, to Nest's 404 — never answered with index.html. Because of the
+ * gate, the middleware can be registered before Nest routes without
+ * intercepting them.
  */
 export function spaFallback(
   req: Request,
@@ -17,7 +18,7 @@ export function spaFallback(
   next: NextFunction,
 ): void {
   if (
-    req.method === 'GET' &&
+    (req.method === 'GET' || req.method === 'HEAD') &&
     !req.path.startsWith('/api/') &&
     !req.path.startsWith('/socket.io') &&
     !extname(req.path)

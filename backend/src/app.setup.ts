@@ -4,6 +4,7 @@ import { CorsIoAdapter } from './common/security/cors-io.adapter';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { createValidationPipe } from './common/pipes/validation.pipe';
+import { STATIC_ROOT } from './modules/frontend/frontend.module';
 import { spaFallback } from './modules/frontend/spa-fallback';
 
 /** Everything main.ts applies to the app before listening, shared with the
@@ -34,7 +35,11 @@ export function configureApp(app: NestExpressApplication): void {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // SPA fallback — serve index.html for client-side routes only. Gated to
-  // extension-less GET paths so hashed assets are not shadowed. Registered before init so it sits ahead of Nest's 404 handler.
+  // The SPA (frontend/dist), both registered before init so they sit ahead
+  // of Nest's 404 handler. spaFallback answers client-side routes (extension-
+  // less GET/HEAD paths) with index.html; useStaticAssets serves real files
+  // and falls through on a miss, so a missing asset or the removed
+  // /js/config.js is Nest's 404 JSON, not index.html.
   app.use(spaFallback);
+  app.useStaticAssets(STATIC_ROOT, { index: false, fallthrough: true });
 }

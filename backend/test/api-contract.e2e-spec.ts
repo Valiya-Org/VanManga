@@ -1,5 +1,4 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
@@ -36,14 +35,9 @@ describe('Canonical API contract (e2e)', () => {
 
     // Imported only now: configuration() reads process.env when the
     // module graph is built.
-    const { AppModule } = await import('../src/app.module');
-    const { configureApp } = await import('../src/app.setup');
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>({
-      bodyParser: false,
-      logger: ['error'],
-    });
-    configureApp(app);
+    // Booted the way main.ts boots it (see src/bootstrap.ts).
+    const { createApp } = await import('../src/bootstrap');
+    app = await createApp({ logger: ['error'], abortOnError: false });
     await app.init();
 
     const { EventsGateway } = await import('../src/modules/events/events.gateway');
@@ -212,6 +206,15 @@ describe('Canonical API contract (e2e)', () => {
     expect(nf.body).toMatchObject({ code: 404, error: 'not-found' });
     const bad = await http().post('/api/download').send({}).expect(400);
     expect(bad.body).toMatchObject({ code: 400, error: 'validation-failed' });
+  });
+
+  it.each([
+    ['malformed JSON', '{bad', '/api/download'],
+    ['a JSON null', 'null', '/api/library'],
+    ['a JSON string', '"str"', '/api/library'],
+  ])('a body that is %s is 400 bad-request', async (_label, body, url) => {
+    const res = await http().post(url).set('Content-Type', 'application/json').send(body).expect(400);
+    expect(res.body).toMatchObject({ code: 400, error: 'bad-request' });
   });
 
   it('accepts bodies up to 1 MB and answers 413 payload-too-large above it', async () => {
