@@ -1,9 +1,9 @@
 # VanManga API 契约（规范接口）
 
-- 版本：P2（2026-11-14）
+- 版本：P4（2026-11-14）
 - 规格来源：`docs/superpowers/specs/2026-11-14-migration-completion-roadmap-design.md` 第 6 节
 - 适用对象：P3 新前端，以及任何新客户端。本文件足以写出类型化客户端，无需阅读后端源码。
-- 旧接口 `/api/dogemanga/*`、旧 socket 事件名、`/js/config.js` 在 P2–P3 期间照旧可用、形状不变，P4 删除；**新客户端不得调用**，本文件不描述它们（见末节"遗留接口"）。
+- 本文件描述的是服务端提供的全部接口。旧版前端用的 `/api/dogemanga/*`、旧 socket 事件名、`/js/config.js`、`GET /api/kavita/status` 已在 P4 删除（见末节）。
 
 ## 1. 通用规则
 
@@ -304,7 +304,7 @@ type Data =
 
 完成时广播 `scan_completed`。
 
-#### 库内检索（P4 可能删除，新前端不需要）
+#### 库内检索（新前端不需要；是否保留待定）
 
 - `GET /api/library/short` → `data: { manga_id: string; manga_name: string }[]`
 - `GET /api/library/search?query=<词>` → `data: Manga[]`（名字、作者或 id 包含该词；空词返回 `[]`）
@@ -381,15 +381,13 @@ type Data = { jwt: string; refreshToken: string };
 
 失败：`400 validation-failed`、`403 kavita-refresh-failed`、`404 kavita-disabled`、`502 kavita-unreachable`。
 
-#### `GET /api/kavita/status`（遗留，新前端改用 `GET /api/config`）
-
-现有前端启动时调用，P2 期间保持旧形状：HTTP 200，`{ code: 200, data: true }` 或 `{ code: 404, data: false }`。**不遵守本契约的信封规则**，P4 删除。
+Kavita 是否启用见 `GET /api/config` 的 `kavitaEnabled`。
 
 ## 4. Socket.IO 事件
 
 - 连接：同源 Socket.IO（默认路径 `/socket.io`），传输 `websocket` 或 `polling`。无需认证，无需加入房间；所有事件广播给全部连接。
 - 客户端只监听，不发送任何事件。
-- 下表事件名与载荷为规范；同一时刻服务端还会发旧事件名（`downloading_info`、`response`、`complete_info`），新客户端忽略它们即可。
+- 服务端只发下表七个事件。
 
 ```ts
 interface ServerToClientEvents {
@@ -464,9 +462,11 @@ interface DmcaAlertEvent {
 
 典型顺序（添加一部漫画）：`queue_updated`（入队）→ `queue_updated`（开始）→ `download_started` → `download_progress`(0/N) → [`chapter_completed` → `download_progress`] × N → `download_completed` → `queue_updated`（结束）。没有要下的章节或章节列表被拦截时，`download_started` 之后直接是 `download_completed`（`chapters_total: 0`），没有 `download_progress`。
 
-## 5. 遗留接口（P4 删除，新客户端勿用）
+## 5. 已删除的旧接口（P4）
 
-- HTTP：`/api/dogemanga/*` 全部路由，响应形状保持 P1 时的样子（多数 HTTP 200/201 + `{ code, data }`，删除冲突为 HTTP 409 + `{ statusCode, timestamp, path, message: { data: false, code: 434 } }`）。启用 `ADMIN_TOKEN` 后，旧的删除（`DELETE /api/dogemanga/deletemanga`）和重新打包（`GET /api/dogemanga/rezip`）同样要求 `X-Admin-Token`，否则规范接口的保护可被旧路由绕过。
-- `GET /api/kavita/status`（见 3.5）。
-- `GET /js/config.js`：`window.MANGA_BASE_URL`、`window.MANGA_BASE_WEBSOCKET_URL`，由 `GET /api/config` 取代。
-- Socket：`downloading_info`（载荷为裸 `manga_id` 字符串）、`response`（`{ manga_id, last_epi_name, last_epi }`）、`complete_info`（`{ manga_id }`）。
+以下接口只为旧版 Vue 2 前端存在，P4 起不再提供（请求它们得到 `404 not-found`）：
+
+- HTTP：`/api/dogemanga/*` 全部路由。对应的规范接口见第 3 节（搜索 → `GET /api/scraper/:source/search`，添加 → `POST /api/library`，删除 → `DELETE /api/library/:mangaId`，重下 → `POST /api/download/chapters`，队列 → `GET /api/download/queue` 等）。
+- `GET /api/kavita/status`：改用 `GET /api/config` 的 `kavitaEnabled`。
+- `GET /js/config.js`（`window.MANGA_BASE_URL`、`window.MANGA_BASE_WEBSOCKET_URL`）：改用 `GET /api/config`；环境变量 `MANGA_BASE_URL`、`MANGA_BASE_WEBSOCKET_URL` 随之作废，服务端不再读取。
+- Socket：`downloading_info`、`response`、`complete_info` 不再发送；改听第 4 节的 `download_started`、`chapter_completed`、`download_completed`。

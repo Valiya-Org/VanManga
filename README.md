@@ -1,138 +1,323 @@
-# VanManga - 漫画抓取应用
+# VanManga
 
 <div align="center">
-  
-![newIcon](https://github.com/user-attachments/assets/9f8b9d7e-e573-4adb-9503-2783ebd507a4)
 
-![Brands](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/654e0b06-45e4-4754-8841-51abb64d019e)
+![VanManga](https://github.com/user-attachments/assets/9f8b9d7e-e573-4adb-9503-2783ebd507a4)
 
-![Preview](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/40b1bfc5-0e74-41e3-9fe0-07ba6882ca12)
+[中文](#中文) · [English](#english)
 
-VanManga 是一款轻量化的，功能丰富的漫画抓取应用。该应用可以抓取、管理漫画资源，以此为漫画阅读、资源备份等提供服务。
+</div>
 
-[Readme - English Version](https://github.com/Alen-QK/python-vanmanga-crawler/blob/aijiangsb/dev_config/README-engVer.md)
+---
 
-</div>  
-  
-  
-## VanManga有什么功能？
-1. 🔍 **漫画搜索** - 通过在搜索框中输入漫画名称，你可以获取前十个最相关的搜索结果，并选择你喜欢的漫画进行下载。
-2. ⚠️ **漫画管理** - 支持在搜索阶段对漫画库查重，避免重复资源，同时支持手动管理漫画自动更新和删除。
-3. 📋 **下载队列** - 漫画会根据下载任务提交顺序进入队列等待，并依序下载。
-4. 🔄 **每日自动更新** - 应用会每日定时扫描所有已下载漫画，检查并自动下载最新的更新内容。
-5. 🖥️ **下载管理面板** - 在管理面板中，你可以检视所有的已下载资源。并且可以通过WebSocket返回的信息实时跟踪当前下载任务的进度和漫画下载状态。
-6. 🗃️ **重新打包漫画文件** - 有外部资源？抑或是本地资源文件结构有问题？没关系，可以使用本地重新打包功能对资源文件夹下的所有漫画文件进行重新打包。
-7. 🔧 **重新下载指定内容** - 想要对下载可能失败的单章漫画进行修复？没问题，使用单章重新下载的功能你可以自由的选择任意漫画的任何章节进行重下。
-8. ↗️ **整合Kavita外链跳转** - 支持与Kavita的账户绑定，设置后可以在管理界面点击跳转至Kavita对应漫画界面。
-9. 📱 **适配手机浏览器** - 支持手机浏览器布局，提升移动设备浏览体验。
-10. **也许在未来我们会添加更多新功能！**
+## 中文
 
-## 如何安装？
+VanManga 是一个自托管的漫画抓取与管理服务：从漫画源（目前是 [DogeManga](https://dogemanga.com/)，源名 `dgmanga`）搜索漫画、加入漫画库、按章节下载并打包成 zip，每天自动检查更新，并可与 [Kavita](https://github.com/Kareadita/Kavita) 阅读服务器联动。
 
-目前，本应用可以通过 Docker Hub 上的打包镜像来进行本地部署。同时，你也可以自定义本地 VanManga 的 HTTP 服务端口。
+> 网页界面正在用 Vue 3 重写。后端接口已经稳定，见 [`docs/api-contract.md`](docs/api-contract.md)。
 
-1. 请确保你的系统中已经安装了[Docker](https://www.docker.com/)。在 Windows 和 MacOS 系统下，我们推荐安装[Docker Desktop](https://www.docker.com/products/docker-desktop/)的 GUI 界面来更轻松的进行部署。如果你正在使用 Linux 系统，请使用命令行来完成部署。
-2. 安装 Docker 后，请使用如下命令来从 Docker Hub 获取最新版本的 VanManga 镜像：
-   ```
-   docker pull wzl778633/vanislord_manga:latest
-   ```
-3. 为了确保你的 Docker 容器可以正常运行，请按照如下介绍设置 环境变量 \ 文件路径映射 \ 端口:
-   - 环境变量
-     >  **PYTHONUNBUFFERED**: 用于使 Docker container 可以输出应用的日志记录，默认值是 1  
-       **MANGA_BASE_URL**: 你用于连接后端的 URL，默认值是 http://localhost:5000. 如果你正在你的 Docker 中使用 bridge，你需要把'localhost'改成你的 bridge 的内部 IP。  
-       **MANGA_BASE_WEBSOCKET_URL**: 你对外暴露的服务器 URL, 主要用于 WebSocket 服务, 默认值是 http://localhost:5000.  
-       **KAVITA_BASE_URL - 可选**: 你Kavita服务器的主机内部地址，用于允许服务器从内网连接。如果正在使用DSM，请输入桥接路径。示例：http://192.168.0.1:5000  
-       **KAVITA_EXPOSE_URL - 可选**： 你Kavita服务器外部暴露地址，用于允许前端页面向Kavita服务跳转。示例：https://kavita:5000   
-       **KAVITA_ADMIN_APIKEY - 可选**： 你的Kavita管理员ApiKey（必须是管理员权限），可从Kavita管理员“设置面板-API密钥/OPDS”一项找到。  
-       **KAVITA_LIB_ID - 可选**： 你准备连接的Kavita库序号，默认值是1，仅在需要额外指定时推荐设置。  
-       **FLARESOLVERR_URL - 可选**： 你的[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)内部地址，允许服务器连接FlareSolverr对漫画源的人机检查进行规避，如果正在使用DSM，请输入桥接路径。额外推荐版本为[21hsmw-flaresolverr](https://github.com/21hsmw/FlareSolverr)  
-       **NUMBER_OF_WORKERS - 可选**： 服务器同时并发下载章节的最大数量，默认值是2。默认值即推荐值，最大请不要超过4 or 5，非常容易被侦测并block。    
-     **请注意，如果需要Kavita相关的服务能够正常配置，则KAVITA_BASE_URL，KAVITA_EXPOSE_URL，KAVITA_ADMIN_APIKEY为必选，缺失会导致相关功能默认关闭**
-   - 文件路径映射
-     > { 你的主机上想要设置为漫画下载库的物理地址 } <==> /downloaded  
-       { 你的主机上想要设置为漫画 config 文件夹的物理地址 } <==> /vanmanga/eng_config  
-       { 你的主机上想要设置为漫画封面文件夹的物理地址} <==> /vanmanga/thumbnails
-   - 端口
-     > 5000:5000 /_ 你也可以映射任何你想映射的端口 _/
-     > 你可以直接复制并使用如下命令，或者在 Docker Desktop 的 GUI 中直接设置相关参数:
-   ```
-   docker run --name /*你的容器名称*/ \
-   -e PYTHONUNBUFFERED=1 \
-   -e MANGA_BASE_URL=http://localhost:5000  \
-   -e MANGA_BASE_WEBSOCKET_URL=http://localhost:5000  \
-   -e KAVITA_BASE_URL=/*Kavita内部地址*/ \
-   -e KAVITA_EXPOSE_URL=/*Kavita外部地址*/ \
-   -e KAVITA_ADMIN_APIKEY=/*Kavita管理员ApiKey*/ \
-   -e KAVITA_LIB_ID=/*Kavita库标号*/ \
-   -e FLARESOLVERR_URL=/*FlareSolverr服务器地址*/ \
-   -e NUMBER_OF_WORKERS=2 \
-   --mount type=bind,source=/*你的主机上想要设置为漫画下载库的物理地址*/,target=/downloaded \
-   --mount type=bind,source=/*你的主机上想要设置为漫画config文件夹的物理地址*/,target=/vanmanga/eng_config \
-   --mount type=bind,source=/*你的主机上想要设置为漫画封面文件夹的物理地址*/,target=/vanmanga/thumbnails \
-   -p 5000:5000
-   wzl778633/vanislord_manga:latest
-   ```
-4. 当容器开始运行后，服务器会自动进行初始化。你可以在 Docker container 的日志记录中查看服务器初始化的状态。
-   - 初始化的目的在于:
-   1. 扫描 config 文件夹下的`manga_library.json`，将所有的已经存在的漫画记录都添加到服务器中，同时检查每部漫画是否有更新。
-   2. 检查Kavita配置，在允许的情况下连接Kavita服务器获取meta data。
-   3. 检查FlareSolverr配置，在允许的情况下连接Bypasser服务器，用于绕过CloudFlare检查。
-5. Kavita服务跳转设置  
-   **请注意，由于跳转功能依赖同源策略，所以请保证本服务于Kavita服务器运行在同一域名\桥接\本地服务中**。由于Kavita默认禁止同源策略，所以请依照以下步骤进行设置：
-   1. 打开Kavita容器```/kavita/config```的物理映射路径
-   2. 找到```appsettings.json```，建议先进行备份再修改
-   3. 在```appsettings.json```中添加```"AllowIFraming": true```，并保存
-   4. 重启Kavita服务，现在Kavita将支持同源策略，接受本服务的iframe自动登录功能
-## 如何使用？
+### 功能
 
-1. **搜索漫画**  
-   目前我们使用[DogeManga](https://dogemanga.com/)来作为漫画源。  
-   在搜索框中输入想搜索的漫画名称，它会返回前十个最相关的结果。**请注意：** 我们会在用户提交下载任务时自动检查已存在资源中是否有可能的类似漫画，如果存在，我们会返回相关信息方便用户确认。  
-   ![s1](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/b0daddd5-faa3-41e6-aaba-2b18c8ea43a7)  
-   ![s2](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/1b7ab286-64c6-4069-83dc-bae342fdc49a)
-2. **下载漫画**  
-   从搜索结果中选择希望下载的对象，并提交下载任务。目前，应用会下载目标漫画下可下载的所有内容(包括但不限于：单行本、连载章节、番外、特殊内容等)。
-   ![s3](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/b27b1631-0faa-46a2-96f9-645b3929907e)  
-   ![s4](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/2b0d9c7a-e343-4ad6-8a0a-57493a87460e)
-3. **漫画库管理界面**  
-   你下载的所有漫画都可以在此仪表板中找到。你可以查看每部漫画的当前状态（例如：下载中/排队中/已完成...）。目前，仪表板仅显示了你已下载的每部漫画的最新章节名称，以便你跟踪每部漫画的状态。
-   ![s4](https://github.com/user-attachments/assets/a12e8c6b-6853-4044-9886-383d5ceb9ed5)
-5. **重新下载**  
-   对于每一部漫画，如果在阅读过程中发现任何（包括但不限于：单行本、连载章节、番外）内容出现错误，您可以简单地请求重新下载该特定（包括但不限于：单行本、连载章节、番外）的内容。
-   ![s5](https://github.com/user-attachments/assets/03c2eaaa-aba9-4f16-ac45-2570eaf2a31b)
-   ![s7](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/0b2aca2f-1a40-4d66-9671-0992f1b9ac61)
-   ![s8](https://github.com/Alen-QK/python-vanmanga-crawler/assets/37805183/d19194c8-e273-4dbe-9439-53e54b0a4a3d)
-7. **管理更新/删除**  
-   可以手动对每一部漫画的自动抓取状态进行设置，对应在系统内的状态也会实时显示在左侧。点击删除按钮，会将对应漫画从漫画库和资源物理地址中一并删除。
-   ![s9](https://github.com/user-attachments/assets/855d8f37-08b8-4608-81ff-59499c1e6724)
-   ![s10](https://github.com/user-attachments/assets/059c3bbb-2c64-4740-a306-e0024feb803c)
-8. **登录Kavita账户**  
-   选择侧边栏的Kavita连接配置，输入Kavita的用户名和密码，即可登录。登录后在漫画库管理界面中，点击漫画的封面，即可跳转到Kavita对应漫画页面。
-   ![s11](https://github.com/user-attachments/assets/6e1c248b-c450-4401-ad7c-5fdc25cbab67)
-9. **阅读漫画**  
-   目前，本应用的文件结构主要支持[Kavita](https://github.com/Kareadita/Kavita)。我们也强烈建议你使用 Kavita 来作为漫画库服务器。您可以通过其 Web 界面轻松管理您的漫画文件，并使用其阅读器进行阅读。它同样支持在 IOS 设备上使用[Paperback](https://paperback.moe/)以及在 Android 设备上使用[Mihon](https://mihon.app/)进行阅读。下面是一些有关服务器部署及设置的相关链接：
+- 搜索漫画源，添加时与库内已有漫画查重（相似名字需要再次确认）
+- 下载队列：一次处理一部漫画，队列持久化到 `queue.json`，重启后继续
+- 每天 01:30 扫描漫画库：未下完的继续下载，连载中的检查新章节；启动时也会扫描一次
+- 重新下载指定章节；整个下载目录重新打包（rezip）
+- 自动更新开关、删除漫画（连同下载目录）
+- 源站报告 DMCA 下架时，自动把该漫画移出漫画库
+- Kavita：每 6 小时同步一次 Kavita 系列链接，下载完成后请求 Kavita 扫描对应目录；代理 Kavita 登录
+- FlareSolverr：检测到 Cloudflare 拦截时借助 FlareSolverr 通过检查，并每 12 分钟复查一次
+- 可选的管理员口令（`ADMIN_TOKEN`）保护删除和重新打包
 
-   - Kavita: https://wiki.kavitareader.com/
-   - Paperback: https://wiki.kavitareader.com/guides/3rdparty/paperback
-   - Mihon: https://wiki.kavitareader.com/guides/3rdparty/tachi-like
+### 架构
 
-   当然，如果你喜欢使用除 Kavita 外的其他的漫画服务器，请随意使用～
+一个 Docker 镜像里包含三部分：
 
-## Demo
+| 部分 | 位置 | 作用 |
+| --- | --- | --- |
+| 后端（NestJS） | `backend/` | HTTP 接口（`/api`）、Socket.IO 事件、下载队列、定时任务、漫画库文件读写，并托管前端静态文件 |
+| 抓取器（Python） | `scrape_cli.py`、`modules/`、`utils/` | 后端每次抓取时以子进程方式调用 `scrape_cli.py`，依赖见 `requirements-scraper.txt` |
+| 前端（Vue 3 SPA） | `frontend/` | 构建产物 `frontend/dist` 由后端在 `/` 提供 |
 
-当前上线的版本为私人社群服务版本，不公开展示，非常抱歉。
+数据文件：
 
-## 贡献
+| 文件 / 目录 | 内容 |
+| --- | --- |
+| `manga_library.json`（`LIBRARY_FILE`） | 漫画库，JSON 对象，键为 `manga_id` |
+| `queue.json`（`QUEUE_FILE`，默认与漫画库同目录） | 尚未完成的下载任务 |
+| 封面目录（`THUMBNAILS_DIR`） | `<manga_id>.jpg` |
+| 下载目录（`DOWNLOAD_ROOT`） | `<漫画名>$<manga_id>/<漫画名>/<章节名>.zip` |
+
+接口文档：[`docs/api-contract.md`](docs/api-contract.md)（HTTP 与 Socket.IO 的完整约定），运行时 Swagger 在 `/api/docs`。
+
+### 用 Docker 部署
+
+在仓库根目录构建镜像：
+
+```bash
+docker build -t vanmanga .
+```
+
+运行（把左侧换成你主机上的目录）：
+
+```bash
+docker run -d --name vanmanga -p 5000:5000 \
+  -v /srv/vanmanga/eng_config:/vanmanga/eng_config \
+  -v /srv/vanmanga/thumbnails:/vanmanga/thumbnails \
+  -v /srv/vanmanga/downloaded:/downloaded \
+  -e ADMIN_TOKEN=换成一个口令 \
+  vanmanga
+```
+
+- 容器内路径：漫画库 `/vanmanga/eng_config/manga_library.json`，队列 `/vanmanga/eng_config/queue.json`，封面 `/vanmanga/thumbnails`，下载 `/downloaded`。
+- 容器以非 root 用户 `node`（uid 1000）运行，挂载的目录必须对它可写：`chown -R 1000:1000 /srv/vanmanga`。
+- 镜像自带健康检查（请求 `/api/scraper/sources`）。
+- 启用 Kavita 需同时设置 `KAVITA_BASE_URL`、`KAVITA_EXPOSE_URL`、`KAVITA_ADMIN_APIKEY`。下载完成后，后端请求 Kavita 扫描 `/manga/<漫画名>$<manga_id>`，所以 Kavita 容器需要把同一个下载目录挂载为 `/manga`。
+
+### 本地开发
+
+需要：Node.js 版本见 `.nvmrc`（当前 24.22.1；`package.json` 的 `engines` 允许 `^22.23.4 || ^24.22.1 || >=26.12.1`，Node 仍信任已吊销的根证书时后端拒绝启动），Python 3（CI 用 3.11）。
+
+```bash
+# 1. Python 抓取器依赖（仓库根目录，建议用 venv）
+python -m venv .venv
+.venv/bin/pip install -r requirements-scraper.txt      # Windows: .venv\Scripts\pip
+
+# 2. 后端（在 backend/ 目录里运行，相对路径都以它为准）
+cd backend
+cp .env.example .env        # 把 PYTHON_EXECUTABLE 指向 venv 里的 python
+npm install
+npm run start:dev           # http://localhost:5000，Swagger 在 /api/docs
+
+# 3. 前端开发服务器（另开一个终端）
+cd frontend
+npm install
+npm run dev                 # http://localhost:5173，/api 与 /socket.io 代理到 localhost:5000
+```
+
+后端也会直接提供 `frontend/dist`：先在 `frontend/` 里 `npm run build`，再访问 `http://localhost:5000`。
+
+测试：
+
+```bash
+cd backend && npm test && npm run lint && npm run test:e2e   # e2e 需要先构建 frontend/dist
+cd frontend && npm test && npm run lint && npm run typecheck
+```
+
+后端从 `backend/.env.local`、`backend/.env` 读取环境变量（已有的进程环境变量优先）。
+
+### 环境变量
+
+全部可选。相对路径以后端的工作目录（`backend/`）为准。“镜像值”是 Dockerfile 里设置的值。
+
+| 变量 | 默认值 | 镜像值 | 说明 |
+| --- | --- | --- | --- |
+| `PORT` | `5000` | `5000` | 监听端口 |
+| `NODE_ENV` | `development` | `production` | 运行环境标识 |
+| `LIBRARY_FILE` | `./eng_config/manga_library.json` | `/vanmanga/eng_config/manga_library.json` | 漫画库文件 |
+| `QUEUE_FILE` | 与 `LIBRARY_FILE` 同目录的 `queue.json` | （默认） | 下载队列持久化文件；留空即默认 |
+| `THUMBNAILS_DIR` | `./thumbnails` | `/vanmanga/thumbnails` | 封面目录 |
+| `DOWNLOAD_ROOT` | `./downloaded` | `/downloaded` | 下载目录 |
+| `NUMBER_OF_WORKERS` | `2` | | 一部漫画内同时下载的章节数。调高容易被源站拦截 |
+| `IMAGE_CONCURRENCY` | `1` | | 一个章节内同时下载的图片数 |
+| `IMAGE_DELAY_MS` | `1000` | | 每张图片之间的等待（毫秒），另加 0 到同等时长的随机抖动；`0` 关闭 |
+| `DOWNLOAD_PROGRESS_INTERVAL_MS` | `10000` | | 长章节下载时输出“X/Y 张”进度日志的间隔（毫秒）；`0` 关闭 |
+| `SEARCH_CACHE_TTL_MS` | `1800000` | | 搜索结果缓存时长（毫秒）。超过这个时间再添加，接口返回 `410 search-expired`，需重新搜索 |
+| `SEARCH_CACHE_MAX_ENTRIES` | `500` | | 搜索结果缓存条数上限，超出时先进先出 |
+| `ADMIN_TOKEN` | 空（关闭） | | 设置后，删除漫画（`DELETE /api/library/:id`）和重新打包（`POST /api/library/rezip`）需带请求头 `X-Admin-Token` |
+| `KAVITA_BASE_URL` | 空 | | 后端访问 Kavita 的地址（如容器内网地址） |
+| `KAVITA_EXPOSE_URL` | 空 | | 浏览器访问 Kavita 的地址（登录链接、系列链接） |
+| `KAVITA_ADMIN_APIKEY` | 空 | | Kavita 管理员 API Key |
+| `KAVITA_LIB_ID` | `1` | | 生成系列链接用的 Kavita 库编号 |
+| `FLARESOLVERR_URL` | 空（关闭） | | FlareSolverr 地址；设置后启用 Cloudflare 检测与复查 |
+| `PYTHON_EXECUTABLE` | `python` | `python`（镜像内 venv） | 装好 `requirements-scraper.txt` 的 Python 解释器 |
+| `PYTHON_CLI_SCRIPT` | `../scrape_cli.py` | `/app/scrape_cli.py` | 抓取器入口 |
+| `PYTHON_WORKING_DIR` | `..` | `/app` | 抓取器工作目录（需包含 `modules/`） |
+| `PYTHON_TIMEOUT_MS` | `180000` | | 单次抓取子进程的超时（毫秒） |
+
+Kavita 只有在 `KAVITA_BASE_URL`、`KAVITA_EXPOSE_URL`、`KAVITA_ADMIN_APIKEY` 三个都设置时才启用。
+
+### 从 Flask 版升级
+
+1. **备份**：停止旧容器，备份三个挂载目录（`eng_config`、`thumbnails`、`downloaded`），尤其是 `manga_library.json`。
+2. **目录权限**：旧容器以 root 运行，新容器以 uid 1000 运行，执行一次 `chown -R 1000:1000` 你的三个目录。
+3. **构建并运行**：`docker build -t vanmanga .`，然后按上文 `docker run` 运行。容器内的数据路径与 Flask 版相同（`/vanmanga/eng_config`、`/vanmanga/thumbnails`、`/downloaded`），原来的挂载可以原样沿用。
+4. **环境变量**：
+   - 删除 `MANGA_BASE_URL`、`MANGA_BASE_WEBSOCKET_URL`：已不再读取，前端通过同源的 `GET /api/config` 获取配置。
+   - `PYTHONUNBUFFERED` 不再需要（后端不读取它，留着也无害）。
+   - `KAVITA_*`、`FLARESOLVERR_URL`、`NUMBER_OF_WORKERS` 含义不变，照旧设置。
+   - 新增：`ADMIN_TOKEN`（建议设置）以及上表中的其他可选项。
+5. **首次启动**：
+   - `manga_library.json` 按原样读取，**不做迁移**。旧记录里的差异（封面地址、缺少的 `updated_at` / `source`、`kavita_url` 为 `"None"` 等）在接口返回时统一处理；之后正常的写入会给记录补上新字段（例如下载后写入 `updated_at`），新加入的漫画保存相对封面地址 `/api/library/<id>/thumbnail`。
+   - 漫画库文件不是合法 JSON 对象（损坏、截断）时，服务**拒绝启动**并在日志里说明原因，文件不会被改动；修复或从备份恢复后再启动。文件不存在时会新建一个空漫画库。
+   - `queue.json` 在队列第一次变化时创建于漫画库同目录。
+   - 启动后会扫描一次漫画库：未下完的漫画继续下载，连载中的检查新章节。
+6. **回滚**：git 标签 `flask-final` 保存了 Flask 版的完整源码。要回到旧版，停掉新容器、用备份恢复数据目录，再运行原来的旧镜像。注意：新版加入的漫画在记录里保存的封面地址是 `/api/library/<id>/thumbnail`，旧版没有这个路由。
+
+### 新增抓取源
+
+见 [`backend/README.md`](backend/README.md)。
+
+### 许可
+
+MIT
 
 ### 贡献者
 
-目前，有两位主要贡献者在为这个项目开发。
-<a href="https://github.com/Alen-QK/python-vanmanga-crawler/graphs/contributors">
 Tom "Van" Wang & Kun "Alen" Qi
-</a>
 
-我们非常欢迎你对我们的项目做出任何贡献～
+---
 
-## License
+## English
 
-[MIT](LICENSE)
+VanManga is a self-hosted manga scraper and library manager. It searches a manga source (currently [DogeManga](https://dogemanga.com/), source name `dgmanga`), adds titles to a library, downloads them chapter by chapter into zip archives, checks for updates every day, and works with the [Kavita](https://github.com/Kareadita/Kavita) reader.
+
+> The web UI is being rebuilt in Vue 3. The backend API is stable and documented in [`docs/api-contract.md`](docs/api-contract.md).
+
+### Features
+
+- Search the source; adding a manga checks the library for similar titles (a near-duplicate needs a second confirmation)
+- Download queue: one manga at a time, persisted to `queue.json` and resumed after a restart
+- Daily library scan at 01:30 (and once at startup): unfinished manga resume, ongoing series are checked for new chapters
+- Re-download selected chapters; re-zip the whole download folder
+- Per-manga auto-update switch; delete a manga together with its download folder
+- When the source reports a DMCA takedown, the manga is removed from the library
+- Kavita: series links synced every 6 hours, a folder scan requested after each download, Kavita login proxied
+- FlareSolverr: gets past Cloudflare challenges when one is detected, re-checking every 12 minutes
+- Optional admin token (`ADMIN_TOKEN`) protecting delete and re-zip
+
+### Architecture
+
+One Docker image holds three parts:
+
+| Part | Location | Role |
+| --- | --- | --- |
+| Backend (NestJS) | `backend/` | HTTP API (`/api`), Socket.IO events, download queue, scheduled jobs, library file, and serves the built frontend |
+| Scraper (Python) | `scrape_cli.py`, `modules/`, `utils/` | Run by the backend as a subprocess for every scrape; dependencies in `requirements-scraper.txt` |
+| Frontend (Vue 3 SPA) | `frontend/` | Its build, `frontend/dist`, is served by the backend at `/` |
+
+Data files:
+
+| File / directory | Contents |
+| --- | --- |
+| `manga_library.json` (`LIBRARY_FILE`) | The library: a JSON object keyed by `manga_id` |
+| `queue.json` (`QUEUE_FILE`, defaults to the library's directory) | Download tasks not yet finished |
+| Cover directory (`THUMBNAILS_DIR`) | `<manga_id>.jpg` |
+| Download directory (`DOWNLOAD_ROOT`) | `<name>$<manga_id>/<name>/<chapter>.zip` |
+
+API reference: [`docs/api-contract.md`](docs/api-contract.md) (the full HTTP and Socket.IO contract, in Chinese); Swagger is served at `/api/docs`.
+
+### Run with Docker
+
+Build from the repository root:
+
+```bash
+docker build -t vanmanga .
+```
+
+Run it (replace the host paths on the left):
+
+```bash
+docker run -d --name vanmanga -p 5000:5000 \
+  -v /srv/vanmanga/eng_config:/vanmanga/eng_config \
+  -v /srv/vanmanga/thumbnails:/vanmanga/thumbnails \
+  -v /srv/vanmanga/downloaded:/downloaded \
+  -e ADMIN_TOKEN=change-me \
+  vanmanga
+```
+
+- Paths in the container: library `/vanmanga/eng_config/manga_library.json`, queue `/vanmanga/eng_config/queue.json`, covers `/vanmanga/thumbnails`, downloads `/downloaded`.
+- The container runs as the non-root `node` user (uid 1000); the mounted directories must be writable by it: `chown -R 1000:1000 /srv/vanmanga`.
+- The image has a health check (it requests `/api/scraper/sources`).
+- Kavita is enabled only when `KAVITA_BASE_URL`, `KAVITA_EXPOSE_URL` and `KAVITA_ADMIN_APIKEY` are all set. After a download the backend asks Kavita to scan `/manga/<name>$<manga_id>`, so the Kavita container must mount the same download directory as `/manga`.
+
+### Local development
+
+Requirements: the Node.js version in `.nvmrc` (currently 24.22.1; `engines` accepts `^22.23.4 || ^24.22.1 || >=26.12.1`, and the backend refuses to start on a Node build that still trusts a revoked root CA), and Python 3 (CI uses 3.11).
+
+```bash
+# 1. Python scraper dependencies (repository root, preferably in a venv)
+python -m venv .venv
+.venv/bin/pip install -r requirements-scraper.txt      # Windows: .venv\Scripts\pip
+
+# 2. Backend (run it from backend/; relative paths resolve against it)
+cd backend
+cp .env.example .env        # point PYTHON_EXECUTABLE at the venv's python
+npm install
+npm run start:dev           # http://localhost:5000, Swagger at /api/docs
+
+# 3. Frontend dev server (second terminal)
+cd frontend
+npm install
+npm run dev                 # http://localhost:5173, proxies /api and /socket.io to localhost:5000
+```
+
+The backend also serves `frontend/dist` directly: run `npm run build` in `frontend/`, then open `http://localhost:5000`.
+
+Tests:
+
+```bash
+cd backend && npm test && npm run lint && npm run test:e2e   # e2e needs frontend/dist built first
+cd frontend && npm test && npm run lint && npm run typecheck
+```
+
+The backend reads `backend/.env.local` and `backend/.env` (variables already in the process environment win).
+
+### Environment variables
+
+All optional. Relative paths resolve against the backend's working directory (`backend/`). "Image" is the value the Dockerfile sets.
+
+| Variable | Default | Image | Meaning |
+| --- | --- | --- | --- |
+| `PORT` | `5000` | `5000` | Listen port |
+| `NODE_ENV` | `development` | `production` | Environment name |
+| `LIBRARY_FILE` | `./eng_config/manga_library.json` | `/vanmanga/eng_config/manga_library.json` | Library file |
+| `QUEUE_FILE` | `queue.json` next to `LIBRARY_FILE` | (default) | Persisted download queue; empty means the default |
+| `THUMBNAILS_DIR` | `./thumbnails` | `/vanmanga/thumbnails` | Cover directory |
+| `DOWNLOAD_ROOT` | `./downloaded` | `/downloaded` | Download directory |
+| `NUMBER_OF_WORKERS` | `2` | | Chapters downloaded in parallel within one manga. Higher values get blocked by the source more easily |
+| `IMAGE_CONCURRENCY` | `1` | | Images downloaded in parallel within one chapter |
+| `IMAGE_DELAY_MS` | `1000` | | Delay between images (ms), plus a random jitter of up to the same amount; `0` disables |
+| `DOWNLOAD_PROGRESS_INTERVAL_MS` | `10000` | | Interval (ms) of the "X/Y images" log line for long chapters; `0` disables |
+| `SEARCH_CACHE_TTL_MS` | `1800000` | | How long search results stay cached (ms). Adding a manga later than this answers `410 search-expired`; search again |
+| `SEARCH_CACHE_MAX_ENTRIES` | `500` | | Maximum cached search results, evicted first-in first-out |
+| `ADMIN_TOKEN` | empty (off) | | When set, deleting a manga (`DELETE /api/library/:id`) and re-zipping (`POST /api/library/rezip`) require the `X-Admin-Token` header |
+| `KAVITA_BASE_URL` | empty | | Kavita address the backend uses (e.g. the container network address) |
+| `KAVITA_EXPOSE_URL` | empty | | Kavita address browsers use (login links, series links) |
+| `KAVITA_ADMIN_APIKEY` | empty | | Kavita admin API key |
+| `KAVITA_LIB_ID` | `1` | | Kavita library number used in series links |
+| `FLARESOLVERR_URL` | empty (off) | | FlareSolverr address; enables Cloudflare detection and re-checks |
+| `PYTHON_EXECUTABLE` | `python` | `python` (the image's venv) | Python interpreter with `requirements-scraper.txt` installed |
+| `PYTHON_CLI_SCRIPT` | `../scrape_cli.py` | `/app/scrape_cli.py` | Scraper entry point |
+| `PYTHON_WORKING_DIR` | `..` | `/app` | Scraper working directory (must contain `modules/`) |
+| `PYTHON_TIMEOUT_MS` | `180000` | | Timeout of one scraper subprocess (ms) |
+
+Kavita is enabled only when `KAVITA_BASE_URL`, `KAVITA_EXPOSE_URL` and `KAVITA_ADMIN_APIKEY` are all set.
+
+### Upgrading from the Flask version
+
+1. **Back up**: stop the old container and back up the three mounted directories (`eng_config`, `thumbnails`, `downloaded`), above all `manga_library.json`.
+2. **Ownership**: the old container ran as root, the new one runs as uid 1000; run `chown -R 1000:1000` on the three directories once.
+3. **Build and run**: `docker build -t vanmanga .`, then `docker run` as above. The data paths inside the container are the same as in the Flask version (`/vanmanga/eng_config`, `/vanmanga/thumbnails`, `/downloaded`), so the existing mounts carry over unchanged.
+4. **Environment variables**:
+   - Remove `MANGA_BASE_URL` and `MANGA_BASE_WEBSOCKET_URL`: they are no longer read; the frontend gets its configuration from the same-origin `GET /api/config`.
+   - `PYTHONUNBUFFERED` is no longer needed (the backend does not read it; leaving it set is harmless).
+   - `KAVITA_*`, `FLARESOLVERR_URL` and `NUMBER_OF_WORKERS` mean the same as before.
+   - New: `ADMIN_TOKEN` (recommended) and the other optional settings in the table above.
+5. **First start**:
+   - `manga_library.json` is read as-is and **not migrated**. Differences in old records (cover URLs, missing `updated_at` / `source`, `kavita_url` of `"None"`, ...) are normalised when the API returns them; normal writes later add the new fields (e.g. `updated_at` after a download), and newly added manga store the relative cover URL `/api/library/<id>/thumbnail`.
+   - If the library file is not a valid JSON object (corrupt, truncated), the server **refuses to start** and logs why, leaving the file untouched; repair it or restore the backup, then start again. A missing file is created as an empty library.
+   - `queue.json` is created next to the library file the first time the queue changes.
+   - After start-up the library is scanned once: unfinished manga resume, ongoing series are checked for new chapters.
+6. **Rolling back**: the git tag `flask-final` holds the complete Flask source. To go back, stop the new container, restore the data directories from the backup and run your old image. Note that manga added by the new version store the cover URL `/api/library/<id>/thumbnail`, a route the Flask version does not have.
+
+### Adding a manga source
+
+See [`backend/README.md`](backend/README.md).
+
+### License
+
+MIT
+
+### Contributors
+
+Tom "Van" Wang & Kun "Alen" Qi

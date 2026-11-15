@@ -1,199 +1,96 @@
-# VanManga NestJS
+# VanManga backend (NestJS)
 
-Hybrid migration: NestJS handles orchestration (API, queue, WebSocket,
-scheduling, filesystem, library state); the proven Python scrapers under
-`../modules/` and `../utils/` are kept as-is and invoked as a subprocess
-via a thin CLI wrapper.
+The NestJS service: HTTP API under `/api`, Socket.IO events, download
+queue, scheduled jobs, the library file, and static hosting of the built
+SPA. Scraping is done by the Python code at the repo root (`scrape_cli.py`,
+`modules/`, `utils/`), run as one subprocess per command.
+
+Deployment, local development, every environment variable and the upgrade
+path from the Flask version are in the [root README](../README.md). The
+client contract is [`docs/api-contract.md`](../docs/api-contract.md);
+Swagger is served at `/api/docs`. `.env.example` lists the variables with
+their defaults.
+
+```bash
+cp .env.example .env && npm install
+npm run start:dev      # run from backend/; relative paths resolve here
+npm test               # unit tests
+npm run test:e2e       # needs ../frontend/dist (cd ../frontend && npm run build)
+npm run lint
+```
 
 ## Architecture
 
 ```
-NestJS (TypeScript)              Python (existing code)
+NestJS (TypeScript)              Python
 ─────────────────────            ──────────────────────
 ScraperService                   scrape_cli.py
   └─ SourceRegistry      <-->     └─ modules/DGmanga.py
        └─ DGmangaSource ──exec──> └─ modules/MangaSite.py
-       └─ <future sources>        └─ utils/* (CF, paths, etc.)
+       └─ <future sources>        └─ utils/*
 
 DownloadService (FIFO queue, persisted to queue.json)
-SearchCacheService (search candidates for lean add)
-LibraryService
+SearchCacheService (search candidates for the lean add)
+LibraryService (manga_library.json)
 EventsGateway (Socket.IO)
-SchedulerService (@Cron)
+SchedulerService (@Cron / @Interval)
 ```
 
-One process per scrape command via `child_process.spawn` — typical scrape
-is minute-scale, so subprocess startup (~200ms) is negligible.
-
-## Docker
-
-A single image holds the NestJS backend, the Python scraper
-(`scrape_cli.py` + `modules/` + `utils/`, deps from
-`requirements-scraper.txt` in a venv) and the built Vue3 SPA. Build from
-the **repo root**:
-
-```bash
-docker build -t vanmanga .
-```
-
-Data paths match the legacy Flask container, so existing volumes mount
-unchanged:
-
-| Path in container | Contents | Env override |
-| --- | --- | --- |
-| `/vanmanga/eng_config/manga_library.json` | library | `LIBRARY_FILE` |
-| `/vanmanga/eng_config/queue.json` | pending downloads (next to the library) | `QUEUE_FILE` |
-| `/vanmanga/thumbnails` | cover images | `THUMBNAILS_DIR` |
-| `/downloaded` | downloaded chapters / zips | `DOWNLOAD_ROOT` |
-
-```bash
-docker run -d -p 5000:5000 \
-  -v /srv/vanmanga/eng_config:/vanmanga/eng_config \
-  -v /srv/vanmanga/thumbnails:/vanmanga/thumbnails \
-  -v /srv/vanmanga/downloaded:/downloaded \
-  -e MANGA_BASE_URL=https://manga.example.com \
-  -e MANGA_BASE_WEBSOCKET_URL=https://manga.example.com \
-  vanmanga
-```
-
-Set `MANGA_BASE_URL` / `MANGA_BASE_WEBSOCKET_URL` to the public address
-(only the legacy frontend reads them, via `/js/config.js`). New library
-records store relative cover URLs and old absolute ones are normalised on
-read, so the domain is not baked into the library. Set `ADMIN_TOKEN` to
-require an `X-Admin-Token` header for deleting manga and re-zipping. The
-legacy routes (`DELETE /api/dogemanga/deletemanga`, `GET /api/dogemanga/rezip`)
-are guarded too, and the pre-redesign web UI never sends the header, so with
-`ADMIN_TOKEN` set that UI can no longer delete or re-zip. All variables are
-listed in `.env.example`.
-
-The HTTP and Socket.IO contract for clients is `docs/api-contract.md`
-(Swagger at `/api/docs`).
-
-The container runs as the non-root `node` user (uid 1000). Volumes created
-by the old Flask container are root-owned; `chown -R 1000:1000` them once
-before switching.
-
-## Adding a new manga source
-
-1. **Python**: drop a new class in `../modules/<NewSource>.py` extending
-   `modules.MangaSite.MangaSite`. Re-use `utils/*` helpers freely.
-2. **NestJS**: add `src/modules/scraper/sources/<new-source>.source.ts`
-   implementing `IMangaSource`; it just shells out to
-   `PythonRunnerService.run({ source: '<new-source>', cmd: '...' })`.
-3. **Register**: add the new source to the `SourceRegistry` providers list.
-4. The CLI dispatcher (`scrape_cli.py`) auto-imports by source name —
-   no change needed there.
-
-The download pipeline, queue, library state, scheduler and WebSocket
-events are source-agnostic; new sources plug in without touching them.
-
-## Status
-
-| Stage | Scope                                                | State    |
-| ----- | ---------------------------------------------------- | -------- |
-| 0     | Scaffold, ConfigModule, pipes/filters, Docker         | Done     |
-| 1     | FilesystemModule, CloudflareModule, EventsModule      | Done     |
-| 2     | ScraperModule (Python subprocess + multi-source registry) | Done     |
-| 3     | LibraryModule (manga_library.json repository, dedup, pagination, CRUD) | Done |
-| 4     | DownloadModule (in-memory FIFO queue, image downloader, orchestrator) | Done |
-| 5     | SchedulerModule + KavitaModule                        | Done     |
-| 6     | Static frontend wiring + endpoint parity              | Done     |
-| 7     | Swagger API docs, unit tests                          | Done     |
-
-### Pending verification
-
-Covered by unit tests only; not yet checked against a real service.
-Kavita is optional and has no local setup, so verify these in a test or
-production environment with `KAVITA_*` configured:
-
-- [ ] **Kavita login / refresh-token** (`POST /api/kavita/login`,
-  `/api/kavita/refreshtoken`): fields were stripped by the whitelist
-  ValidationPipe before the fix, so these never worked on NestJS. Check a
-  real login returns `apiKey`/`jwt`/`refreshToken` and the login URL opens
-  Kavita.
-- [ ] **Kavita enabled check**: now requires `KAVITA_BASE_URL`,
-  `KAVITA_EXPOSE_URL` and `KAVITA_ADMIN_APIKEY` all set (as in Flask).
-  Check `GET /api/kavita/status` returns `code: 200` with all three set.
-- [ ] **Kavita sync and scan**: check the 6-hourly / startup sync fills
-  `kavita_url` for downloaded manga, and that a finished download triggers
-  a folder scan (`/manga/<name>$<id>`) that Kavita picks up.
-
-## Local development
-
-```bash
-# Python scraper deps (from the repo root), in a venv
-python -m venv .venv && .venv/bin/pip install -r requirements-scraper.txt
-
-# NestJS deps; point PYTHON_EXECUTABLE in .env at the venv's python
-cd backend && cp .env.example .env && npm install
-
-# Run / test
-npm run start:dev
-npm test
-```
-
-Listens on `PORT` (default 5000), exposes everything under `/api`.
-
-## Module map (current)
+## Module map
 
 - `src/config` — environment-driven configuration (typed `AppConfig`).
-- `src/common` — global filter, logging interceptor, shared
-  ValidationPipe (`whitelist: true`: every DTO field needs a
-  class-validator decorator) and the startup check that refuses a Node
-  build still trusting a revoked root CA.
-- `src/modules/filesystem` — directory tree, image writes, zip archive,
-  thumbnail persistence. Replaces `utils/make_path.py`,
-  `utils/generate_file_path.py`, `utils/re_zip_downloaded.py`,
-  `utils/save_thumbnail.py`, `utils/thumbnails_creator.py`.
-- `src/modules/cloudflare` — FlareSolverr client + CF state. Replaces
-  `utils/flaresolverr_bypasser.py`.
-- `src/modules/events` — Socket.IO gateway. Replaces all `socketio.emit`
-  calls in `main.py`. Canonical events: `download_started`,
-  `download_progress`, `chapter_completed`, `download_completed`,
-  `queue_updated`, `scan_completed`, `dmca_alert`; the legacy
-  `downloading_info`, `response`, `complete_info` are still emitted
-  alongside until P4.
-- `src/modules/scraper` — IMangaSource interface, Python subprocess
-  runner, source registry, DGmanga adapter. **Wraps** existing Python
-  scrapers — does not reimplement them.
-- `src/modules/library` — manga_library.json repository, duplicate
-  detection, pagination, full CRUD. Replaces `utils/make_manga_object.py`,
-  `utils/duplicate_check.py`, `utils/lib_pagination.py` and the
-  `DogeLibrary/Pagination/ShortLib/ChangeDownload/DeleteManga/...`
-  Flask resources in main.py. Canonical routes `/api/library/*`
-  (`library.controller.ts`); legacy `/api/dogemanga/*` in
-  `library-legacy.controller.ts`.
-- `src/modules/download` — FIFO queue (concurrency=1, persisted to
-  `queue.json`, restored on boot, same-kind tasks de-duplicated),
-  image downloader (429 backoff + CF headers), per-task orchestrator
-  (chapters → images → zip → library update → WebSocket events).
-  Replaces `utils/TaskQueue.py`, `confirm_comic_task` /
-  `download_chapter_task` / `re_zip_task` in main.py, and
-  `modules/DGmanga.py:download_img`. Routes under `/api/download/*`
-  (new) and `/api/dogemanga/{redownload,cdl,dlqueue,rezip,confirmmanga}`
-  (legacy). There is no `confirmdownload`: adding a manga already queues
-  its download.
-- `src/modules/search-cache` — in-memory TTL/FIFO cache of search
-  candidates keyed by `source:manga_id`, so `POST /api/library` can take
-  just `{ manga_id, source, submit_sign }`; a miss answers `410
-  search-expired`. The canonical search returns cover URLs
-  (`/api/scraper/:source/search-thumbnail/:id`); only the legacy
-  `/api/dogemanga/search` returns base64.
-- `src/modules/kavita` — Kavita server integration. Authenticate via
-  Plugin API, sync kavita_url into library (every 6h), trigger folder
-  scan after download completes, proxy login/refresh-token for the
-  frontend. Replaces `utils/kavita_lib_pull.py`,
-  `utils/kavita_scan_folder.py`, `KavitaStatus/KavitaLogin/
-  KavitaRefreshToken` Flask resources. Routes under `/api/kavita/*`.
-- `src/modules/scheduler` — Scheduled tasks via `@nestjs/schedule`.
-  Daily scan (01:30 cron) checks all ongoing manga for new chapters
-  and enqueues downloads. Kavita sync every 6 hours. Dynamic CF
-  monitor (12 min interval, auto-added when CF is detected). Runs
-  boot_scanning() on startup. Replaces Flask-APScheduler jobs in
-  main.py.
-- `src/modules/frontend` — Serves the Vue3 SPA from
-  `frontend/dist/` (Vite build output) via `@nestjs/serve-static`. Dynamic
-  `/js/config.js` endpoint injects `MANGA_BASE_URL` and
-  `MANGA_BASE_WEBSOCKET_URL` from environment (replaces
-  `create_config_js.sh`). SPA fallback serves `index.html` for
-  client-side routes.
+- `src/common` — global exception filter (failure envelope), logging
+  interceptor, shared ValidationPipe (`whitelist: true`: every DTO field
+  needs a class-validator decorator), the admin-token guard, and the
+  startup check that refuses a Node build still trusting a revoked root CA.
+- `src/modules/filesystem` — directory tree, image writes, zip archives,
+  cover files.
+- `src/modules/cloudflare` — FlareSolverr client and Cloudflare state.
+- `src/modules/events` — Socket.IO gateway; emits only the seven events in
+  the contract.
+- `src/modules/scraper` — `IMangaSource`, the Python subprocess runner,
+  source registry, DGmanga adapter; routes `/api/scraper/*`.
+- `src/modules/search-cache` — TTL/FIFO cache of search candidates keyed
+  by `source:manga_id`, so `POST /api/library` takes just
+  `{ manga_id, source, submit_sign }`.
+- `src/modules/library` — the `manga_library.json` repository (atomic
+  writes; refuses to boot on a corrupt file), duplicate detection,
+  pagination; routes `/api/library/*`.
+- `src/modules/download` — FIFO queue (one task at a time, persisted to
+  `queue.json`, restored and de-duplicated on boot), image downloader,
+  per-task orchestrator; routes `/api/download/*`, `POST /api/library/rezip`
+  and `GET /api/library/:id/chapters`.
+- `src/modules/kavita` — Kavita sync, folder scans, login/refresh proxy;
+  routes `/api/kavita/*`.
+- `src/modules/scheduler` — boot scan, daily 01:30 scan, 6-hourly Kavita
+  sync, dynamic 12-minute Cloudflare monitor.
+- `src/modules/frontend` — serves `../frontend/dist` with an SPA fallback
+  for client-side routes, and `GET /api/config`.
+
+## Adding a manga source
+
+1. **Python**: add a class in `../modules/<NewSource>.py` extending
+   `modules.MangaSite.MangaSite`, and register it in
+   `../scrape_cli.py:SOURCE_REGISTRY`.
+2. **NestJS**: add `src/modules/scraper/sources/<new-source>.source.ts`
+   implementing `IMangaSource`; it shells out through
+   `PythonRunnerService`.
+3. **Register**: add the class to the `sources` list in
+   `src/modules/scraper/scraper.module.ts`.
+
+The download pipeline, queue, library, scheduler and socket events are
+source-agnostic.
+
+## Pending verification
+
+Covered by unit tests only; Kavita has no local setup, so check these in
+an environment with `KAVITA_*` configured:
+
+- [ ] `POST /api/kavita/login` / `refreshtoken` return
+  `apiKey`/`jwt`/`refreshToken`, and the login URL opens Kavita.
+- [ ] With all three of `KAVITA_BASE_URL`, `KAVITA_EXPOSE_URL`,
+  `KAVITA_ADMIN_APIKEY` set, `GET /api/config` reports
+  `kavitaEnabled: true`.
+- [ ] The startup / 6-hourly sync fills `kavita_url` for downloaded manga,
+  and a finished download triggers a folder scan
+  (`/manga/<name>$<id>`) that Kavita picks up.
