@@ -60,7 +60,7 @@ docker build -t vanmanga .
 运行（把左侧换成你主机上的目录）：
 
 ```bash
-docker run -d --name vanmanga -p 5000:5000 \
+docker run -d --name vanmanga --restart unless-stopped -p 5000:5000 \
   -v /srv/vanmanga/eng_config:/vanmanga/eng_config \
   -v /srv/vanmanga/thumbnails:/vanmanga/thumbnails \
   -v /srv/vanmanga/downloaded:/downloaded \
@@ -218,7 +218,7 @@ docker build -t vanmanga .
 Run it (replace the host paths on the left):
 
 ```bash
-docker run -d --name vanmanga -p 5000:5000 \
+docker run -d --name vanmanga --restart unless-stopped -p 5000:5000 \
   -v /srv/vanmanga/eng_config:/vanmanga/eng_config \
   -v /srv/vanmanga/thumbnails:/vanmanga/thumbnails \
   -v /srv/vanmanga/downloaded:/downloaded \

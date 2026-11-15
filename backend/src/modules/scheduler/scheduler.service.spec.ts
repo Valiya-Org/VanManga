@@ -50,9 +50,15 @@ function setup(
     reset: jest.fn(),
   };
 
+  // ids deleted after list() took its snapshot
+  const removed = new Set<string>();
+  const repo = {
+    list: () => library,
+    has: (id: string) => !removed.has(id) && library.some((m) => m.manga_id === id),
+  };
   const svc = new SchedulerService(
     registry as never,
-    { list: () => library } as never,
+    repo as never,
     scraper as never,
     downloadService as never,
     kavita as never,
@@ -68,7 +74,7 @@ function setup(
   const queued = () =>
     downloadService.submitFullManga.mock.calls.map((c) => c[0] as string);
   const cleanup = () => intervals.forEach((i) => clearInterval(i));
-  return { svc, scraper, downloadService, kavita, cloudflare, registry, queued, cleanup };
+  return { svc, scraper, downloadService, kavita, cloudflare, registry, queued, cleanup, removed };
 }
 
 beforeEach(() => axiosGet.mockReset());
@@ -124,6 +130,44 @@ describe('SchedulerService daily/boot scan', () => {
     const t = setup([manga('first', { completed: false }), manga('second', { completed: false })]);
     await t.svc.handleDailyScan();
     expect(t.queued()).toEqual(['second', 'first']);
+  });
+
+  it('skips a manga deleted after the scan took its snapshot (I4)', async () => {
+    // reverse order: 'slow' is checked first; 'gone' is deleted meanwhile
+    const t = setup([manga('gone', { completed: false }), manga('slow')]);
+    t.scraper.getMetadata.mockImplementation(async () => {
+      t.removed.add('gone');
+      return { chapterCount: 5, serialization: 0 };
+    });
+    await t.svc.handleDailyScan();
+    expect(t.queued()).toEqual([]);
+  });
+
+  it('keeps scanning when queuing one manga throws (e.g. MangaNotFoundException)', async () => {
+    const t = setup([manga('ok', { completed: false }), manga('throws', { completed: false })]);
+    t.downloadService.submitFullManga.mockImplementation((id: string) => {
+      if (id === 'throws') throw new Error('Unknown manga: throws');
+    });
+    await expect(t.svc.handleDailyScan()).resolves.toBeUndefined();
+    expect(t.queued()).toEqual(['throws', 'ok']);
+  });
+
+  it('a boot scan that fails outright is logged, not left as an unhandled rejection', async () => {
+    const t = setup([]);
+    jest
+      .spyOn(t.svc as unknown as { bootScan: () => Promise<void> }, 'bootScan')
+      .mockRejectedValue(new Error('boom'));
+    const unhandled = jest.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      await t.svc.onModuleInit();
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      expect(unhandled).not.toHaveBeenCalled();
+      await expect(t.svc.handleDailyScan()).resolves.toBeUndefined();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
   });
 
   it('uses each manga’s own source', async () => {

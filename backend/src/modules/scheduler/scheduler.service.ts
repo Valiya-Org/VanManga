@@ -52,8 +52,9 @@ export class SchedulerService implements OnModuleInit {
       );
     }
 
-    // Boot scan in background — don't block module init
-    setImmediate(() => void this.bootScan());
+    // Boot scan in background — don't block module init. Never let a
+    // rejection escape: an unhandled one would exit the process.
+    setImmediate(() => void this.safeScan('Boot scan'));
   }
 
   // --------------------------------------------------- Job 1: daily scan
@@ -62,8 +63,16 @@ export class SchedulerService implements OnModuleInit {
   @Cron('0 30 1 * * *', { name: 'daily-scan' })
   async handleDailyScan(): Promise<void> {
     this.logger.log('=== Start Daily Update Task ===');
-    await this.bootScan();
+    await this.safeScan('Daily scan');
     this.logger.log('=== Daily Update Task Over ===');
+  }
+
+  private async safeScan(label: string): Promise<void> {
+    try {
+      await this.bootScan();
+    } catch (err) {
+      this.logger.error(`${label} failed: ${(err as Error).message}`);
+    }
   }
 
   // --------------------------------------------------- Job 2: kavita sync
@@ -160,6 +169,12 @@ export class SchedulerService implements OnModuleInit {
     const reversed = [...allManga].reverse();
 
     for (const manga of reversed) {
+      // The scan works on a snapshot and takes minutes on a real library:
+      // a manga deleted meanwhile (by the user or a DMCA run) is skipped.
+      if (!this.repo.has(manga.manga_id)) {
+        this.logger.debug(`${manga.manga_name}: removed during the scan, skip`);
+        continue;
+      }
       this.logger.debug(`Scanning: ${manga.manga_name}`);
 
       if (!manga.completed) {
@@ -167,7 +182,7 @@ export class SchedulerService implements OnModuleInit {
         this.logger.log(
           `${manga.manga_name}/${manga.manga_id}: incomplete, queuing full download`,
         );
-        this.downloadService.submitFullManga(manga.manga_id);
+        this.submit(manga.manga_id, manga.manga_name);
         continue;
       }
 
@@ -200,7 +215,7 @@ export class SchedulerService implements OnModuleInit {
           this.logger.log(
             `${manga.manga_name}: update available (${history} → ${current}), queuing`,
           );
-          this.downloadService.submitFullManga(manga.manga_id);
+          this.submit(manga.manga_id, manga.manga_name);
         }
       } catch (err) {
         this.logger.error(
@@ -213,6 +228,23 @@ export class SchedulerService implements OnModuleInit {
     }
 
     this.logger.log('=== Boot scan completed ===');
+  }
+
+  /** Queue a full download; a manga that vanished since the has() check
+   *  (MangaNotFoundException) or any other refusal is logged, never thrown,
+   *  so one manga cannot end the scan. */
+  private submit(mangaId: string, mangaName: string): void {
+    if (!this.repo.has(mangaId)) {
+      this.logger.debug(`${mangaName}: removed during the scan, skip`);
+      return;
+    }
+    try {
+      this.downloadService.submitFullManga(mangaId);
+    } catch (err) {
+      this.logger.warn(
+        `Could not queue ${mangaName}/${mangaId}: ${(err as Error).message}`,
+      );
+    }
   }
 
   private sleep(ms: number): Promise<void> {
