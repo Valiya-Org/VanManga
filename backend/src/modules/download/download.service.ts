@@ -64,8 +64,4 @@ export class DownloadService {
   snapshot(): QueueSnapshot {
     return this.queue.snapshot();
   }
-
-  isMangaBusy(mangaId: string): boolean {
-    return this.queue.isMangaBusy(mangaId);
-  }
 }

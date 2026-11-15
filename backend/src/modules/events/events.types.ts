@@ -54,5 +54,3 @@ export const SOCKET_EVENTS = {
   SCAN_COMPLETED: 'scan_completed',
   DMCA_ALERT: 'dmca_alert',
 } as const;
-
-export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
