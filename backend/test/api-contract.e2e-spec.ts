@@ -218,10 +218,10 @@ describe('Canonical API contract (e2e)', () => {
         'GET /api/scraper/{source}/search-thumbnail/{mangaId}',
         'POST /api/kavita/login',
         'POST /api/kavita/refreshtoken',
-        'GET /api/kavita/status',
       ]),
     );
     expect(ops.filter((op) => op.includes('dogemanga'))).toEqual([]);
+    expect(ops).not.toContain('GET /api/kavita/status');
 
     const security = (method: 'delete' | 'post', path: string) =>
       (doc.paths[path] as Record<string, { security?: unknown[] }>)[method].security;

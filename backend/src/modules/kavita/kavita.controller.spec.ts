@@ -114,9 +114,8 @@ describe('KavitaController (HTTP, production ValidationPipe)', () => {
     expect(res.body.error).toBe('validation-failed');
   });
 
-  it('GET /kavita/status keeps its legacy body (HTTP 200, code 200/404)', async () => {
-    await http().get('/api/kavita/status').expect(200, { data: true, code: 200 });
-    kavita.enabled = false;
-    await http().get('/api/kavita/status').expect(200, { data: false, code: 404 });
+  it('GET /kavita/status is gone (GET /api/config reports kavitaEnabled)', async () => {
+    const res = await http().get('/api/kavita/status').expect(404);
+    expect(res.body).toMatchObject({ code: 404, error: 'not-found' });
   });
 });

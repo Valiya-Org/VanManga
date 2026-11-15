@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Logger, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Logger, Post } from '@nestjs/common';
 import { ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
 import type { AxiosError } from 'axios';
 import { IsString } from 'class-validator';
@@ -29,21 +29,6 @@ export class KavitaController {
   private readonly logger = new Logger(KavitaController.name);
 
   constructor(private readonly kavita: KavitaService) {}
-
-  /** Legacy shape kept on purpose: the current frontend calls this on
-   *  every start and branches on the body code (200/404) with HTTP 200.
-   *  New clients read `kavitaEnabled` from GET /api/config. Removed in P4. */
-  @Get('status')
-  @ApiOperation({
-    summary: 'Deprecated: use GET /api/config (legacy body: code 200 or 404)',
-    deprecated: true,
-  })
-  getStatus() {
-    return {
-      data: this.kavita.enabled,
-      code: this.kavita.enabled ? 200 : 404,
-    };
-  }
 
   @Post('login')
   @HttpCode(200)
