@@ -15,6 +15,15 @@ const toast = useToast();
 
 const mangaId = computed(() => ui.chapterPickerFor);
 const manga = computed(() => (mangaId.value ? library.byId(mangaId.value) : undefined));
+// Kept after close so the title does not go blank during the leave transition.
+const titleName = ref('');
+watch(
+  [mangaId, () => manga.value?.manga_name],
+  ([id, name]) => {
+    if (id) titleName.value = name ?? id;
+  },
+  { immediate: true },
+);
 
 const chapters = ref<Chapter[]>([]);
 const selected = ref(new Set<number>());
@@ -91,7 +100,7 @@ async function confirm(): Promise<void> {
 <template>
   <UModal
     v-model:open="open"
-    :title="`《${manga?.manga_name ?? mangaId ?? ''}》· 选择章节`"
+    :title="`《${titleName}》· 选择章节`"
     description="选择要重新下载的章节"
     :ui="{
       content: 'bg-vm-surface ring-vm-divider sm:max-w-2xl',

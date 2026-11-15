@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useUiStore } from '@/stores/ui';
+import { computed, ref, watch } from 'vue';
+import { useUiStore, type ConfirmRequest } from '@/stores/ui';
 
 /** The single app-wide confirmation dialog, driven by `ui.confirm()`. */
 const ui = useUiStore();
-const request = computed(() => ui.pendingConfirm);
+
+// The last request stays rendered after it is answered, so the dialog does
+// not go blank during its leave transition; the next request replaces it.
+const request = ref<ConfirmRequest | null>(ui.pendingConfirm);
+watch(
+  () => ui.pendingConfirm,
+  (next) => {
+    if (next) request.value = next;
+  },
+);
 
 const open = computed({
-  get: () => request.value !== null,
+  get: () => ui.pendingConfirm !== null,
   set: (value: boolean) => {
     if (!value) ui.answerConfirm(false);
   },
