@@ -1,5 +1,4 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -27,14 +26,8 @@ describe('CORS_ORIGINS opt-in (e2e)', () => {
     });
     delete process.env.QUEUE_FILE;
 
-    const { AppModule } = await import('../src/app.module');
-    const { configureApp } = await import('../src/app.setup');
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>({
-      bodyParser: false,
-      logger: ['error'],
-    });
-    configureApp(app);
+    const { createApp } = await import('../src/bootstrap');
+    app = await createApp({ logger: ['error'], abortOnError: false });
     await app.init();
   });
 

@@ -1,13 +1,8 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { SwaggerModule } from '@nestjs/swagger';
-import type { NestExpressApplication } from '@nestjs/platform-express';
-import { AppModule } from './app.module';
-import { configureApp } from './app.setup';
+import { createApp } from './bootstrap';
 import { findRevokedRoots } from './common/security/trust-store-check';
-import { buildSwaggerDocument } from './swagger';
 
 async function bootstrap(): Promise<void> {
   // Outbound scraping / Kavita calls rely on Node's bundled CA store, which
@@ -21,16 +16,9 @@ async function bootstrap(): Promise<void> {
     );
   }
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+  const app = await createApp({
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
-    // configureApp registers its own body parser with a larger limit.
-    bodyParser: false,
   });
-
-  configureApp(app);
-
-  // Swagger — available at /api/docs
-  SwaggerModule.setup('api/docs', app, buildSwaggerDocument(app));
 
   const config = app.get(ConfigService);
   const port = config.get<number>('port', 5000);

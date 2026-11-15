@@ -5,10 +5,11 @@
 // Needs `npm run build` in backend/ and frontend/ first.
 //
 // E2E_BACKEND_MAIN=1 (set in CI) runs the production entry dist/main.js.
-// Otherwise the app is booted the way backend/test/*.e2e-spec.ts boot it
-// (AppModule + configureApp, no Swagger): main.js refuses to start on a Node
-// older than the .nvmrc version because of a TLS trust-store check, which is
-// irrelevant here (the fake scraper makes no outbound requests).
+// Otherwise the app is built by the same createApp() main.js uses
+// (dist/bootstrap.js, also used by backend/test/*.e2e-spec.ts), skipping
+// only main.js's TLS trust-store check, which refuses to start on a Node
+// older than the .nvmrc version and is irrelevant here (the fake scraper
+// makes no outbound requests).
 'use strict';
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
@@ -43,18 +44,11 @@ for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exi
 if (process.env.E2E_BACKEND_MAIN === '1') {
   require(join(BACKEND_DIST, 'main.js'));
 } else {
-  const fromBackend = (id) => require(require.resolve(id, { paths: [BACKEND_DIST] }));
-  fromBackend('reflect-metadata');
-  const { NestFactory } = fromBackend('@nestjs/core');
-  const { AppModule } = require(join(BACKEND_DIST, 'app.module.js'));
-  const { configureApp } = require(join(BACKEND_DIST, 'app.setup.js'));
+  require(require.resolve('reflect-metadata', { paths: [BACKEND_DIST] }));
+  const { createApp } = require(join(BACKEND_DIST, 'bootstrap.js'));
 
   (async () => {
-    const app = await NestFactory.create(AppModule, {
-      bodyParser: false,
-      logger: ['log', 'error', 'warn'],
-    });
-    configureApp(app);
+    const app = await createApp({ logger: ['log', 'error', 'warn'] });
     await app.listen(Number(process.env.PORT));
     console.log(`[e2e] backend on http://127.0.0.1:${process.env.PORT} (data: ${dir})`);
   })().catch((err) => {
