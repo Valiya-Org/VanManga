@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { ADMIN_TOKEN } from './e2e/constants';
 
 // End-to-end tests against the real backend serving the built frontend.
 // Build first: `npm run build` here and in ../backend. See README.md.
 const PORT = Number(process.env.E2E_PORT ?? 5480);
-export const ADMIN_TOKEN = 'e2e-admin-token';
 
 export default defineConfig({
   testDir: './e2e',
@@ -11,7 +11,9 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // No retries: the backend and its library outlive a failed attempt, so a
+  // retry would start from a dirty library and fail for the wrong reason.
+  retries: 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,

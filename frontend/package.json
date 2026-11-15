@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "test:e2e": "playwright test --project=smoke",

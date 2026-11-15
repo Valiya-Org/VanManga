@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN_TOKEN } from '../playwright.config';
+import { ADMIN_TOKEN } from './constants';
 
 // search → add → appears in the library → delete (with the admin token) → gone
 test('search, add, then delete a manga with the admin token', async ({ page }) => {
@@ -30,6 +30,18 @@ test('search, add, then delete a manga with the admin token', async ({ page }) =
   await expect(card).toContainText('测试漫画一');
   await expect(card.getByTestId('card-overlay')).toHaveCount(0);
   await expect(page.getByTestId('queue-button')).toHaveText('队列');
+
+  // No horizontal scrolling at phone width (spec §5), library and settings.
+  const desktop = page.viewportSize();
+  await page.setViewportSize({ width: 375, height: 812 });
+  const scrollWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
+  expect(await scrollWidth()).toBeLessThanOrEqual(375);
+  await page.getByTestId('bottom-tabs').getByRole('link', { name: '设置' }).click();
+  await expect(page.getByTestId('settings-view')).toBeVisible();
+  expect(await scrollWidth()).toBeLessThanOrEqual(375);
+  await page.getByTestId('bottom-tabs').getByRole('link', { name: '漫画库' }).click();
+  await expect(card).toBeVisible();
+  if (desktop) await page.setViewportSize(desktop);
 
   // Delete: confirm, then enter the admin token.
   await card.getByRole('button', { name: '《测试漫画一》的操作' }).click();
