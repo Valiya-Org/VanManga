@@ -25,6 +25,11 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: { parser: tseslint.parser },
     },
+    rules: {
+      // Undefined names are caught by vue-tsc (typescript-eslint's advice);
+      // ESLint does not see the Nuxt UI auto-imports (useToast, …).
+      'no-undef': 'off',
+    },
   },
 
   {
