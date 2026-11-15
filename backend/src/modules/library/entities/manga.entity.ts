@@ -1,6 +1,6 @@
 /** Persisted manga record. Field names mirror the legacy
- *  manga_library.json schema exactly so the existing file (and the
- *  Vue frontend that consumes it) keep working unchanged.
+ *  manga_library.json schema exactly so a Flask-era library file keeps
+ *  working unchanged.
  *  See main.py:LIB_PATH and utils/make_manga_object.py for the source. */
 export interface Manga {
   manga_id: string;
