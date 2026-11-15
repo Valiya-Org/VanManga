@@ -46,13 +46,14 @@ export interface QueueSnapshot {
   pending: TaskSummaryDto[];
 }
 
-/** Public-facing snapshot of a task — what controllers expose. */
+/** Public-facing snapshot of a task — what controllers expose
+ *  (docs/api-contract.md §2). Only queued and running tasks appear in a
+ *  snapshot, so finished states and `finishedAt` are not part of it. */
 export interface TaskSummaryDto {
   id: string;
   kind: TaskKind;
   mangaId?: string;
-  status: TaskStatus;
+  status: 'pending' | 'running';
   enqueuedAt: number;
   startedAt?: number;
-  finishedAt?: number;
 }

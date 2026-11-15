@@ -363,10 +363,9 @@ export class TaskQueueService implements OnModuleInit {
       id: t.id,
       kind: t.payload.kind,
       mangaId: this.payloadMangaId(t.payload) ?? undefined,
-      status: t.status,
+      status: t.status === 'running' ? 'running' : 'pending',
       enqueuedAt: t.enqueuedAt,
       startedAt: t.startedAt,
-      finishedAt: t.finishedAt,
     };
   }
 }
