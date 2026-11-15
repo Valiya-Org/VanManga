@@ -158,9 +158,7 @@ export class TaskQueueService implements OnModuleInit {
   }
 
   private findDuplicate(payload: TaskPayload): TaskHandle | undefined {
-    const mangaId = this.payloadMangaId(payload);
-    const same = (t: TaskHandle) =>
-      t.payload.kind === payload.kind && this.payloadMangaId(t.payload) === mangaId;
+    const same = (t: TaskHandle) => this.sameTask(t.payload, payload);
 
     if (payload.kind === TaskKind.REDOWNLOAD) {
       // A running redownload has fixed its chapter list; queue a new one.
@@ -168,6 +166,11 @@ export class TaskQueueService implements OnModuleInit {
     }
     if (this.active && same(this.active)) return this.active;
     return this.pending.find(same);
+  }
+
+  /** Same kind for the same manga (rezip has none, so all rezips match). */
+  private sameTask(a: TaskPayload, b: TaskPayload): boolean {
+    return a.kind === b.kind && this.payloadMangaId(a) === this.payloadMangaId(b);
   }
 
   private mergeChapters(target: RedownloadPayload, extra: RedownloadPayload): void {
@@ -214,7 +217,9 @@ export class TaskQueueService implements OnModuleInit {
   /** A missing file is an empty queue. A corrupt one is renamed to
    *  queue.json.corrupt-<unix-seconds> (kept as evidence) and ignored:
    *  unlike the library, losing the queue only loses work the next boot
-   *  scan re-queues anyway. */
+   *  scan re-queues anyway. Entries of the wrong shape are dropped, and
+   *  duplicates (same id, or the same task as an earlier entry) are
+   *  folded into the first, each with a log line. */
   private readPersisted(): TaskHandle[] {
     let raw: string;
     try {
@@ -246,36 +251,80 @@ export class TaskQueueService implements OnModuleInit {
       return [];
     }
 
-    const entries = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    const entries: unknown[] = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
     const handles: TaskHandle[] = [];
+    const ids = new Set<string>();
     for (const entry of entries) {
-      if (!entry || typeof entry.id !== 'string' || !this.isValidPayload(entry.payload)) {
+      if (!this.isValidEntry(entry)) {
         this.logger.warn(`Skipping malformed queue entry: ${JSON.stringify(entry)}`);
         continue;
       }
+      if (ids.has(entry.id)) {
+        this.logger.warn(`Dropping duplicate queue entry (same id): ${JSON.stringify(entry)}`);
+        continue;
+      }
+      // The same rules as enqueue(): every restored task is pending, so a
+      // re-download merges its chapters into an earlier one for that manga.
+      const duplicate = handles.find((h) => this.sameTask(h.payload, entry.payload));
+      if (duplicate) {
+        if (entry.payload.kind === TaskKind.REDOWNLOAD) {
+          this.mergeChapters(duplicate.payload as RedownloadPayload, entry.payload);
+        }
+        this.logger.warn(`Dropping duplicate queue entry: ${JSON.stringify(entry)}`);
+        continue;
+      }
+      ids.add(entry.id);
       handles.push({
         id: entry.id,
         payload: entry.payload,
         status: 'pending',
-        enqueuedAt: typeof entry.enqueuedAt === 'number' ? entry.enqueuedAt : Date.now(),
+        enqueuedAt: entry.enqueuedAt,
       });
     }
     return handles;
   }
 
+  private isValidEntry(e: unknown): e is PersistedQueue['tasks'][number] {
+    if (!e || typeof e !== 'object') return false;
+    const entry = e as Record<string, unknown>;
+    return (
+      typeof entry.id === 'string' &&
+      entry.id !== '' &&
+      typeof entry.enqueuedAt === 'number' &&
+      Number.isFinite(entry.enqueuedAt) &&
+      this.isValidPayload(entry.payload)
+    );
+  }
+
   private isValidPayload(p: unknown): p is TaskPayload {
     if (!p || typeof p !== 'object') return false;
     const payload = p as Record<string, unknown>;
+    const hasManga = typeof payload.mangaId === 'string' && payload.mangaId !== '';
     switch (payload.kind) {
       case TaskKind.REZIP:
         return true;
       case TaskKind.FULL_MANGA:
-        return typeof payload.mangaId === 'string';
+        return hasManga;
       case TaskKind.REDOWNLOAD:
-        return typeof payload.mangaId === 'string' && Array.isArray(payload.chapters);
+        return (
+          hasManga &&
+          Array.isArray(payload.chapters) &&
+          payload.chapters.length > 0 &&
+          payload.chapters.every((c) => this.isValidChapter(c))
+        );
       default:
         return false;
     }
+  }
+
+  private isValidChapter(c: unknown): boolean {
+    if (!c || typeof c !== 'object') return false;
+    const chapter = c as Record<string, unknown>;
+    return (
+      Number.isInteger(chapter.index) &&
+      typeof chapter.title === 'string' &&
+      typeof chapter.url === 'string'
+    );
   }
 
   // ------------------------------------------------------------ helpers

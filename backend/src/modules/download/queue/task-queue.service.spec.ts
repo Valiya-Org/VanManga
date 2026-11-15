@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -325,6 +326,89 @@ describe('TaskQueueService', () => {
         }),
       );
       expect(make().snapshot().pending.map((t) => t.id)).toEqual(['4']);
+    });
+
+    it('drops entries whose shape is wrong, with a log line each', () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      try {
+        const ch = { index: 1, title: 't', url: 'u' };
+        writeFileSync(
+          file,
+          JSON.stringify({
+            version: 1,
+            tasks: [
+              { id: '', payload: { kind: 'rezip' }, enqueuedAt: 1 },
+              { id: '1', payload: { kind: 'full-manga', mangaId: '' }, enqueuedAt: 1 },
+              { id: '2', payload: { kind: 'redownload', mangaId: 'x', chapters: [] }, enqueuedAt: 1 },
+              { id: '3', payload: { kind: 'redownload', mangaId: 'x', chapters: [ch, { index: '2', title: 't', url: 'u2' }] }, enqueuedAt: 1 },
+              { id: '4', payload: { kind: 'redownload', mangaId: 'x', chapters: [{ index: 1, title: 't' }] }, enqueuedAt: 1 },
+              { id: '5', payload: { kind: 'full-manga', mangaId: 'a' }, enqueuedAt: 'yesterday' },
+              null,
+              { id: '6', payload: { kind: 'redownload', mangaId: 'x', chapters: [ch] }, enqueuedAt: 7 },
+            ],
+          }),
+        );
+        const q = make();
+        expect(q.snapshot().pending.map((t) => [t.id, t.enqueuedAt])).toEqual([['6', 7]]);
+        const dropped = warn.mock.calls.filter(([m]) => String(m).startsWith('Skipping malformed queue entry'));
+        expect(dropped).toHaveLength(7);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('de-duplicates restored entries against each other', () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      try {
+        const c = (n: number) => ({ index: n, title: `t${n}`, url: `u${n}` });
+        writeFileSync(
+          file,
+          JSON.stringify({
+            version: 1,
+            tasks: [
+              { id: '1', payload: { kind: 'full-manga', mangaId: 'a' }, enqueuedAt: 1 },
+              { id: '2', payload: { kind: 'redownload', mangaId: 'b', chapters: [c(1), c(2)] }, enqueuedAt: 2 },
+              { id: '3', payload: { kind: 'rezip' }, enqueuedAt: 3 },
+              { id: '4', payload: { kind: 'full-manga', mangaId: 'a' }, enqueuedAt: 4 },
+              { id: '5', payload: { kind: 'redownload', mangaId: 'b', chapters: [c(2), c(3)] }, enqueuedAt: 5 },
+              { id: '6', payload: { kind: 'rezip' }, enqueuedAt: 6 },
+              { id: '1', payload: { kind: 'full-manga', mangaId: 'z' }, enqueuedAt: 7 },
+              { id: '8', payload: { kind: 'full-manga', mangaId: 'b' }, enqueuedAt: 8 },
+            ],
+          }),
+        );
+        const q = make();
+        expect(q.snapshot().pending.map((t) => [t.id, t.kind, t.mangaId])).toEqual([
+          ['1', 'full-manga', 'a'],
+          ['2', 'redownload', 'b'],
+          ['3', 'rezip', undefined],
+          ['8', 'full-manga', 'b'],
+        ]);
+        expect(warn.mock.calls.filter(([m]) => String(m).startsWith('Dropping duplicate queue entry'))).toHaveLength(4);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('merges the chapters of duplicate restored re-downloads (by url)', async () => {
+      const c = (n: number) => ({ index: n, title: `t${n}`, url: `u${n}` });
+      writeFileSync(
+        file,
+        JSON.stringify({
+          version: 1,
+          tasks: [
+            { id: '1', payload: { kind: 'redownload', mangaId: 'b', chapters: [c(1), c(2)] }, enqueuedAt: 1 },
+            { id: '2', payload: { kind: 'redownload', mangaId: 'b', chapters: [c(2), c(3)] }, enqueuedAt: 2 },
+          ],
+        }),
+      );
+      const q = make();
+      const ctl = controllable();
+      q.registerExecutor(ctl.executor);
+      await settle();
+      expect(ctl.started).toEqual([
+        { kind: TaskKind.REDOWNLOAD, mangaId: 'b', chapters: [c(1), c(2), c(3)] },
+      ]);
     });
   });
 });
