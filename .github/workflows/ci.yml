@@ -102,8 +102,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-scraper.txt
       - run: pip install -r requirements-scraper.txt
-      # Importing scrape_cli pulls in modules/* and their deps.
       - run: python scrape_cli.py --help
+      # scrape_cli imports modules/* lazily inside its handlers, so --help
+      # alone proves nothing: import the scraper (and through it the
+      # third-party deps and utils/) explicitly, from the repo root.
+      - name: Import check
+        run: python -B -c "import scrape_cli, modules.DGmanga"
 
   docker:
     name: Docker image

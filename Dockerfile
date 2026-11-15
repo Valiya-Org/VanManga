@@ -58,6 +58,9 @@ COPY --from=frontend-build /src/frontend/dist /app/frontend/dist
 COPY scrape_cli.py /app/
 COPY modules /app/modules
 COPY utils /app/utils
+# Fail the build if a scraper dependency or a utils/ file is missing
+# (scrape_cli.py only imports modules/* inside its handlers).
+RUN cd /app && python -B -c "import scrape_cli, modules.DGmanga"
 
 # Data paths match the legacy Flask container, so its volumes mount as-is.
 ENV NODE_ENV=production \
