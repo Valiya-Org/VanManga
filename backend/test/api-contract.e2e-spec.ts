@@ -182,6 +182,11 @@ describe('Canonical API contract (e2e)', () => {
     expect(JSON.parse(readFileSync(queueFile, 'utf8'))).toEqual({ version: 1, tasks: [] });
   });
 
+  it('POST /api/library/rezip requires the admin token', async () => {
+    const res = await http().post('/api/library/rezip').expect(401);
+    expect(res.body).toMatchObject({ code: 401, error: 'admin-token-required' });
+  });
+
   it('unknown routes and bad bodies use the failure envelope', async () => {
     const nf = await http().get('/api/no-such-route').expect(404);
     expect(nf.body).toMatchObject({ code: 404, error: 'not-found' });
