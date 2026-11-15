@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import type { AppConfig } from '../../config/configuration';
 import { mangaDirName, mangaFolderName } from './manga-path';
 
@@ -37,8 +37,17 @@ export class FilesystemService {
     return { outerDir, innerDir };
   }
 
+  /** The chapter folder, which must be a direct child of innerDir: it is
+   *  later removed or zipped-and-removed, so it may never be innerDir
+   *  itself or anything above it. */
   chapterDir(innerDir: string, chapterTitle: string): string {
-    return join(innerDir, chapterTitle);
+    const dir = join(innerDir, chapterTitle);
+    if (dirname(resolve(dir)) !== resolve(innerDir)) {
+      throw new Error(
+        `Unsafe chapter folder name ${JSON.stringify(chapterTitle)}`,
+      );
+    }
+    return dir;
   }
 
   async writeImage(

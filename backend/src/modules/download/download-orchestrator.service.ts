@@ -298,7 +298,10 @@ export class DownloadOrchestratorService implements OnModuleInit {
     innerDir: string,
     updateLastEpi: boolean,
   ): Promise<void> {
-    const safeTitle = this.sanitiseTitle(reformatChapterTitle(chapter.title));
+    const safeTitle = this.sanitiseTitle(
+      reformatChapterTitle(chapter.title),
+      chapter.index,
+    );
     const chapterDir = this.fsService.chapterDir(innerDir, safeTitle);
 
     const images = await this.scrapeChapterImages(
@@ -504,10 +507,22 @@ export class DownloadOrchestratorService implements OnModuleInit {
    *  segment. The legacy app used the title verbatim, so on Linux (the
    *  deployment target) only the path separator is replaced, keeping names
    *  identical to existing downloads. Windows — development only — also
-   *  rejects a handful of other characters. */
-  private sanitiseTitle(title: string): string {
+   *  rejects a handful of other characters.
+   *
+   *  A title that ends up empty, `.` or `..` would make the chapter folder
+   *  the manga folder (or its parent), so a failed chapter's removeDir or
+   *  the zip step would destroy every chapter: it falls back to
+   *  `第<index>话`. Every other title is unchanged. */
+  private sanitiseTitle(title: string, index: number): string {
     const hostile = process.platform === 'win32' ? /[\\/:*?"<>|]/g : /\//g;
-    return title.replace(hostile, '_').trim();
+    const safe = title.replace(hostile, '_').trim();
+    if (safe === '' || safe === '.' || safe === '..') {
+      this.logger.warn(
+        `Chapter ${index}: unusable title ${JSON.stringify(title)}; using 第${index}话`,
+      );
+      return `第${index}话`;
+    }
+    return safe;
   }
 
   /** Overridable in tests so backoff waits don't take real time. */

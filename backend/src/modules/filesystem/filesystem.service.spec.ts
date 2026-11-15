@@ -21,3 +21,19 @@ describe('FilesystemService.ensureMangaTree', () => {
     expect((await stat(tree.innerDir)).isDirectory()).toBe(true);
   });
 });
+
+describe('FilesystemService.chapterDir', () => {
+  const svc = new FilesystemService({ get: () => '/dl' } as never);
+  const inner = join('/dl', 'Name$id', 'Name');
+
+  it('joins a normal title under the manga folder', () => {
+    expect(svc.chapterDir(inner, '第1话')).toBe(join(inner, '第1话'));
+  });
+
+  it.each([[''], ['.'], ['..'], [join('..', 'x')]])(
+    'refuses %j, which is not a direct child of the manga folder',
+    (title) => {
+      expect(() => svc.chapterDir(inner, title)).toThrow(/Unsafe chapter folder/);
+    },
+  );
+});

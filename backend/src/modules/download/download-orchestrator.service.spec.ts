@@ -346,6 +346,24 @@ describe('DownloadOrchestratorService — parity with the Flask pipeline', () =>
     expect(t.record().last_epi_name).toBe('第68-第69话');
   });
 
+  it.each([[''], ['   '], ['.'], ['..'], [' .. ']])(
+    'never uses the manga folder as a chapter folder: title %j → 第N话 (I5)',
+    async (title) => {
+      const t = setup(newManga(), ['第1话', title], {
+        download: { succeeded: [], failed: Array.from({ length: 10 }, () => ({ reason: 'x', job: {} })) },
+      });
+      await t.runFull();
+
+      const dirs = t.fsService.chapterDir.mock.calls.map((c) => c[1]);
+      expect(dirs).toEqual(['第1话', '第2话']);
+      // the failed chapter removes only its own folder
+      expect(t.fsService.removeDir.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
+        '/dl/inner/第1话',
+        '/dl/inner/第2话',
+      ]);
+    },
+  );
+
   it('retries a chapter whose page is rate limited (429) instead of dropping it', async () => {
     const t = setup(newManga(), ['第1话'], {
       chapterImages: [{ errorCode: 429 }, { errorCode: 429 }, {}],
