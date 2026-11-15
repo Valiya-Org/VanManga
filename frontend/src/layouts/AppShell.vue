@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useToast } from '@nuxt/ui/composables';
 import { watch } from 'vue';
 import { useMangaSearch } from '@/composables/useMangaSearch';
 import { useLibraryStore } from '@/stores/library';

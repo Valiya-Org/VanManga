@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useToast } from '@nuxt/ui/composables';
 import { ref } from 'vue';
 import { isApiError } from '@/api/errors';
 import { errorMessage } from '@/errors/messages';

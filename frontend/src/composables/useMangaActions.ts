@@ -1,3 +1,4 @@
+import { useToast } from '@nuxt/ui/composables';
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue';
 import { isApiError } from '@/api/errors';
 import type { Manga } from '@/api/types';

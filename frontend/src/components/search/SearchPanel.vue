@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useToast } from '@nuxt/ui/composables';
 import { computed, reactive, ref, watch } from 'vue';
 import type { SearchCandidate } from '@/api/types';
 import type { MangaSearch } from '@/composables/useMangaSearch';
