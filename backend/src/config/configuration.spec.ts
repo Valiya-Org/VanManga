@@ -73,6 +73,41 @@ describe('configuration: security.adminToken', () => {
   });
 });
 
+describe('configuration: numeric env values', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('uses the default when unset or blank', () => {
+    delete process.env.NUMBER_OF_WORKERS;
+    expect(configuration().concurrency.workers).toBe(2);
+    process.env.NUMBER_OF_WORKERS = '  ';
+    expect(configuration().concurrency.workers).toBe(2);
+  });
+
+  it('reads a whole number (surrounding spaces allowed)', () => {
+    process.env.NUMBER_OF_WORKERS = ' 4 ';
+    process.env.IMAGE_DELAY_MS = '0';
+    const cfg = configuration();
+    expect(cfg.concurrency.workers).toBe(4);
+    expect(cfg.download.imageDelayMs).toBe(0);
+  });
+
+  it.each([
+    ['NUMBER_OF_WORKERS', 'two'],
+    ['NUMBER_OF_WORKERS', '2abc'],
+    ['NUMBER_OF_WORKERS', '0'],
+    ['IMAGE_CONCURRENCY', '-1'],
+    ['IMAGE_DELAY_MS', '1.5'],
+    ['PORT', 'http'],
+    ['PYTHON_TIMEOUT_MS', '0'],
+  ])('fails fast on %s=%p', (name, value) => {
+    process.env[name] = value;
+    expect(() => configuration()).toThrow(new RegExp(`Invalid ${name}=`));
+  });
+});
+
 describe('configuration: legacy LIB_PATH', () => {
   const saved = { ...process.env };
   afterEach(() => {

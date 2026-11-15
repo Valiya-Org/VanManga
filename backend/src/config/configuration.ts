@@ -70,6 +70,21 @@ export interface AppConfig {
   };
 }
 
+/** A whole-number env var, `fallback` when unset or blank. Anything else
+ *  that is not a plain integer >= min fails startup: parseInt would turn
+ *  `two` into NaN (e.g. a NaN chapter concurrency stalls every download)
+ *  and `2abc` into 2 without a word. */
+function intEnv(name: string, fallback: number, min: number): number {
+  const raw = (process.env[name] ?? '').trim();
+  if (raw === '') return fallback;
+  if (!/^\d+$/.test(raw) || Number(raw) < min || !Number.isSafeInteger(Number(raw))) {
+    throw new Error(
+      `Invalid ${name}=${JSON.stringify(process.env[name])}: expected a whole number >= ${min}`,
+    );
+  }
+  return Number(raw);
+}
+
 export default (): AppConfig => {
   const kavitaBaseUrl = process.env.KAVITA_BASE_URL ?? '';
   const kavitaExposeUrl = process.env.KAVITA_EXPOSE_URL ?? '';
@@ -88,7 +103,7 @@ export default (): AppConfig => {
   }
 
   return {
-    port: parseInt(process.env.PORT ?? '5000', 10),
+    port: intEnv('PORT', 5000, 0),
     nodeEnv: process.env.NODE_ENV ?? 'development',
     storage: {
       downloadRoot: resolve(process.env.DOWNLOAD_ROOT ?? './downloaded'),
@@ -99,25 +114,22 @@ export default (): AppConfig => {
       ),
     },
     concurrency: {
-      workers: parseInt(process.env.NUMBER_OF_WORKERS ?? '2', 10),
+      workers: intEnv('NUMBER_OF_WORKERS', 2, 1),
     },
     download: {
-      imageConcurrency: parseInt(process.env.IMAGE_CONCURRENCY ?? '1', 10),
-      imageDelayMs: parseInt(process.env.IMAGE_DELAY_MS ?? '1000', 10),
-      progressIntervalMs: parseInt(
-        process.env.DOWNLOAD_PROGRESS_INTERVAL_MS ?? '10000',
-        10,
-      ),
+      imageConcurrency: intEnv('IMAGE_CONCURRENCY', 1, 1),
+      imageDelayMs: intEnv('IMAGE_DELAY_MS', 1000, 0),
+      progressIntervalMs: intEnv('DOWNLOAD_PROGRESS_INTERVAL_MS', 10000, 0),
     },
     searchCache: {
-      ttlMs: parseInt(process.env.SEARCH_CACHE_TTL_MS ?? '1800000', 10), // 30 min
-      maxEntries: parseInt(process.env.SEARCH_CACHE_MAX_ENTRIES ?? '500', 10),
+      ttlMs: intEnv('SEARCH_CACHE_TTL_MS', 1_800_000, 1), // 30 min
+      maxEntries: intEnv('SEARCH_CACHE_MAX_ENTRIES', 500, 1),
     },
     kavita: {
       baseUrl: kavitaBaseUrl,
       exposeUrl: kavitaExposeUrl,
       adminApiKey: kavitaApiKey,
-      libId: parseInt(process.env.KAVITA_LIB_ID ?? '1', 10),
+      libId: intEnv('KAVITA_LIB_ID', 1, 0),
       // Same rule as Flask: all three must be set, or calls go to a relative URL.
       enabled: [kavitaBaseUrl, kavitaExposeUrl, kavitaApiKey].every(
         (v) => v.length > 0,
@@ -138,7 +150,7 @@ export default (): AppConfig => {
       executable: process.env.PYTHON_EXECUTABLE ?? 'python',
       cliScript: resolve(process.env.PYTHON_CLI_SCRIPT ?? '../scrape_cli.py'),
       workingDir: resolve(process.env.PYTHON_WORKING_DIR ?? '..'),
-      timeoutMs: parseInt(process.env.PYTHON_TIMEOUT_MS ?? '180000', 10),
+      timeoutMs: intEnv('PYTHON_TIMEOUT_MS', 180_000, 1),
     },
   };
 };

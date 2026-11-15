@@ -105,7 +105,7 @@ cd frontend && npm test && npm run lint && npm run typecheck
 
 ### 环境变量
 
-全部可选。相对路径以后端的工作目录（`backend/`）为准。“镜像值”是 Dockerfile 里设置的值。
+全部可选。相对路径以后端的工作目录（`backend/`）为准。“镜像值”是 Dockerfile 里设置的值。数值变量必须是整数（并发数、超时等至少为 1），否则服务拒绝启动并在日志里指出是哪个变量。
 
 | 变量 | 默认值 | 镜像值 | 说明 |
 | --- | --- | --- | --- |
@@ -261,7 +261,7 @@ The backend reads `backend/.env.local` and `backend/.env` (variables already in 
 
 ### Environment variables
 
-All optional. Relative paths resolve against the backend's working directory (`backend/`). "Image" is the value the Dockerfile sets.
+All optional. Relative paths resolve against the backend's working directory (`backend/`). "Image" is the value the Dockerfile sets. Numeric variables must be whole numbers (concurrency and timeouts at least 1); otherwise the server refuses to start and names the variable.
 
 | Variable | Default | Image | Meaning |
 | --- | --- | --- | --- |
