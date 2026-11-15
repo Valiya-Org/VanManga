@@ -9,6 +9,7 @@ import { useLibraryStore } from '@/stores/library';
 import { useQueueStore } from '@/stores/queue';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
+import { openExternal, safeExternalUrl } from '@/utils/open-external';
 
 export const BUSY_REASON = '下载中或排队中，暂不可用';
 
@@ -42,7 +43,8 @@ export function useMangaActions(manga: MaybeRefOrGetter<Manga>): MangaActions {
   const autoUpdate = computed(() => isAutoUpdate(toValue(manga)));
   const kavitaUrl = computed(() => {
     if (!config.kavitaEnabled || !session.kavitaLoggedIn) return null;
-    return toValue(manga).kavita_url ?? session.kavitaLoginUrl;
+    // Only http(s) links are ever opened.
+    return safeExternalUrl(toValue(manga).kavita_url) ?? safeExternalUrl(session.kavitaLoginUrl);
   });
 
   function fail(err: unknown): void {
@@ -69,7 +71,7 @@ export function useMangaActions(manga: MaybeRefOrGetter<Manga>): MangaActions {
   }
 
   function openInKavita(): void {
-    if (kavitaUrl.value) window.open(kavitaUrl.value, '_blank', 'noopener');
+    openExternal(kavitaUrl.value);
   }
 
   async function remove(): Promise<void> {

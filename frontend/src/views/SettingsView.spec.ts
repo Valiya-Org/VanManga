@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { defineComponent, h } from 'vue';
+import { useToast } from '@nuxt/ui/composables';
+import { defineComponent, h, type Ref } from 'vue';
 import { http } from '@/api/http';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
 import { mountWithApp, findButton, click, bodyText, waitForText } from '@/test/mount';
@@ -22,8 +23,15 @@ afterEach(() => {
 });
 enableAutoUnmount(afterEach);
 
+/** The live toast list, captured inside the harness (toasts are global). */
+let toasts: Ref<{ id: string | number }[]>;
+const toastIds = () => toasts.value.map((t) => t.id);
+
 const Harness = defineComponent({
-  setup: () => () => [h(SettingsView), h(ConfirmDialog), h(AdminTokenDialog)],
+  setup: () => {
+    toasts = useToast().toasts;
+    return () => [h(SettingsView), h(ConfirmDialog), h(AdminTokenDialog)];
+  },
 });
 
 async function mountSettings(kavitaEnabled: boolean, seed?: () => void) {
@@ -80,10 +88,20 @@ describe('SettingsView · Kavita', () => {
     expect(useSessionStore().kavitaLoggedIn).toBe(true);
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     await click(findButton('打开 Kavita'));
-    expect(open).toHaveBeenCalledWith('http://k/login?apiKey=a', '_blank', 'noopener');
+    expect(open).toHaveBeenCalledWith('http://k/login?apiKey=a', '_blank', 'noopener,noreferrer');
     await click(findButton('退出登录'));
     expect(w.find('[data-testid="kavita-login"]').exists()).toBe(true);
     expect(localStorage.getItem('vanmanga.kavita')).toBeNull();
+  });
+
+  it('refuses to open a non-http Kavita link', async () => {
+    await mountSettings(true, () => {
+      localStorage.setItem('vanmanga.kavita', JSON.stringify({ loginUrl: 'javascript:alert(1)' }));
+    });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    await click(findButton('打开 Kavita'));
+    expect(open).not.toHaveBeenCalled();
+    await waitForText('Kavita 地址无效，无法打开');
   });
 });
 
@@ -101,6 +119,20 @@ describe('SettingsView · maintenance and about', () => {
     expect(server.lastRequest()?.url).toBe('library/rezip');
     expect(server.lastRequest()?.headers['X-Admin-Token']).toBe('tok');
     await waitForText('已加入下载队列');
+  });
+
+  it('cancelling the admin-token prompt aborts the re-zip silently', async () => {
+    await mountSettings(false);
+    await click(findButton('重新打包全部漫画'));
+    server.replyOnce(401, { code: 401, error: 'admin-token-required' });
+    await click(document.querySelector('[data-testid="confirm-ok"]'));
+    expect(bodyText()).toContain('需要管理员口令');
+    const before = toastIds();
+    await click(findButton('取消'));
+    for (let i = 0; i < 5; i++) await flushPromises();
+    expect(server.requests).toHaveLength(1);
+    expect(toastIds()).toEqual(before);
+    expect(findButton('重新打包全部漫画')?.disabled).toBe(false);
   });
 
   it('shows the Valiya logo in the about section', async () => {

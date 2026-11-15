@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/config';
 import { useLibraryStore } from '@/stores/library';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
+import { openExternal } from '@/utils/open-external';
 import valiyaLogo from '@/assets/valiya-logo.png';
 
 const config = useConfigStore();
@@ -37,7 +38,9 @@ async function login(): Promise<void> {
 }
 
 function openKavita(): void {
-  if (session.kavitaLoginUrl) window.open(session.kavitaLoginUrl, '_blank', 'noopener');
+  if (!openExternal(session.kavitaLoginUrl)) {
+    toast.add({ title: 'Kavita 地址无效，无法打开', color: 'error' });
+  }
 }
 
 function logout(): void {

@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { defineComponent, h } from 'vue';
+import { useToast } from '@nuxt/ui/composables';
+import { defineComponent, h, type Ref } from 'vue';
 import { http } from '@/api/http';
 import { fakeServer, type FakeServer } from '@/test/fake-server';
 import { mountWithApp, findButton, click, bodyText, waitForText } from '@/test/mount';
@@ -24,14 +25,21 @@ beforeEach(() => {
 afterEach(() => server.restore());
 enableAutoUnmount(afterEach);
 
+/** The live toast list, captured inside the harness (toasts are global). */
+let toasts: Ref<{ id: string | number }[]>;
+const toastIds = () => toasts.value.map((t) => t.id);
+
 /** The menu plus the global dialogs it relies on. */
 const Harness = defineComponent({
   props: { manga: { type: Object as () => Manga, required: true } },
-  setup: (props) => () => [
+  setup: (props) => {
+    toasts = useToast().toasts;
+    return () => [
     h(MangaActionsMenu, { manga: props.manga }),
     h(ConfirmDialog),
     h(AdminTokenDialog),
-  ],
+    ];
+  },
 });
 
 async function mountMenu(manga: Manga, seed?: () => void) {
@@ -91,7 +99,28 @@ describe('MangaActionsMenu', () => {
     await openMenu();
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     await click(menuItem('在 Kavita 中打开'));
-    expect(open).toHaveBeenCalledWith('http://k/series/1', '_blank', 'noopener');
+    expect(open).toHaveBeenCalledWith('http://k/series/1', '_blank', 'noopener,noreferrer');
+  });
+
+  it('never opens a non-http Kavita link', async () => {
+    await mountMenu(makeManga({ kavita_url: 'javascript:alert(1)' }), () => {
+      useConfigStore().config = { kavitaEnabled: true, kavitaExposeUrl: 'http://k', adminRequired: false };
+      localStorage.setItem('vanmanga.kavita', JSON.stringify({ loginUrl: 'javascript:alert(2)' }));
+    });
+    expect(useSessionStore().kavitaLoggedIn).toBe(true);
+    await openMenu();
+    expect(menuItem('在 Kavita 中打开')).toBeUndefined();
+  });
+
+  it('falls back to the login link when the series link is not http', async () => {
+    await mountMenu(makeManga({ kavita_url: 'javascript:alert(1)' }), () => {
+      useConfigStore().config = { kavitaEnabled: true, kavitaExposeUrl: 'http://k', adminRequired: false };
+      localStorage.setItem('vanmanga.kavita', JSON.stringify({ loginUrl: 'http://k/login?apiKey=x' }));
+    });
+    await openMenu();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    await click(menuItem('在 Kavita 中打开'));
+    expect(open).toHaveBeenCalledWith('http://k/login?apiKey=x', '_blank', 'noopener,noreferrer');
   });
 
   it('toggles auto-update', async () => {
@@ -131,6 +160,24 @@ describe('MangaActionsMenu', () => {
     expect(server.requests.at(-1)?.method).toBe('delete');
     expect(useLibraryStore().items).toHaveLength(0);
     await waitForText('已删除');
+  });
+
+  it('cancelling the admin-token prompt aborts the delete silently', async () => {
+    await mountMenu(makeManga({ manga_name: '要留的' }));
+    await openMenu();
+    await click(menuItem('删除'));
+    server.replyOnce(401, { code: 401, error: 'admin-token-required' });
+    await click(document.querySelector('[data-testid="confirm-ok"]'));
+    expect(bodyText()).toContain('需要管理员口令');
+
+    const before = toastIds();
+    await click(findButton('取消'));
+    for (let i = 0; i < 5; i++) await flushPromises();
+
+    // Only the one unauthenticated attempt; no retry, no toast of any kind.
+    expect(server.requests).toHaveLength(1);
+    expect(useLibraryStore().items).toHaveLength(1);
+    expect(toastIds()).toEqual(before);
   });
 
   it('cancelling the confirmation sends nothing', async () => {
