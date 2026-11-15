@@ -43,8 +43,7 @@ const downloaded = computed(() => props.manga.last_epi_name !== '');
       >
         <template v-if="status.kind === 'downloading'">
           <p>
-            下载中<template v-if="status.progress?.total">
-              {{ status.progress.done }} / {{ status.progress.total }} 话</template>
+            {{ status.progress?.total ? `下载中 ${status.progress.done} / ${status.progress.total} 话` : '下载中' }}
           </p>
           <ProgressBar :done="status.progress?.done ?? 0" :total="status.progress?.total ?? null" />
         </template>

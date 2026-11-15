@@ -8,7 +8,7 @@ import { useQueueStore } from '@/stores/queue';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 
-export const BUSY_REASON = '下载中或排队中，暂不能删除或重新下载';
+export const BUSY_REASON = '下载中或排队中，暂不可用';
 
 export interface MangaActions {
   /** Downloading or queued: delete and re-download are disabled. */

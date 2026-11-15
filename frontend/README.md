@@ -46,7 +46,8 @@ Nuxt UI 的 vite 插件在每次运行 vite/vitest 时生成 `auto-imports.d.ts`
 - 假抓取器 `e2e/fake-scraper.cjs` 通过后端已有的配置项接入，无需改后端：
   `PYTHON_EXECUTABLE=<node>`、`PYTHON_CLI_SCRIPT=e2e/fake-scraper.cjs`
   （后端自己的 `test/*.e2e-spec.ts` 也这样用 `fake-cli.cjs`）。它按 `scrape_cli.py`
-  的单行 JSON 协议回答 `search`、`metadata`、`chapters`；章节列表为空，所以全量下载立即结束。
+  的单行 JSON 协议回答 `search`、`metadata`、`chapters`、`chapter-images`。除 `ui2` 外章节列表为空，
+  全量下载立即结束；`ui2` 的章节会一直"下载中"，供截图展示进度与排队状态。
 - CI（`.github/workflows/ci.yml` 的 `e2e` job）设 `E2E_BACKEND_MAIN=1`，用生产入口
   `dist/main.js` 启动。本地默认用与后端 e2e 相同的方式（`AppModule` + `configureApp`）启动：
   `main.js` 会拒绝在低于 `.nvmrc` 版本的 Node 上启动（TLS 根证书检查），而假抓取器不发任何外部请求。
