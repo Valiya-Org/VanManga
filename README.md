@@ -14,8 +14,6 @@
 
 VanManga 是一个自托管的漫画抓取与管理服务：从漫画源（目前是 [DogeManga](https://dogemanga.com/)，源名 `dgmanga`）搜索漫画、加入漫画库、按章节下载并打包成 zip，每天自动检查更新，并可与 [Kavita](https://github.com/Kareadita/Kavita) 阅读服务器联动。
 
-> 网页界面正在用 Vue 3 重写。后端接口已经稳定，见 [`docs/api-contract.md`](docs/api-contract.md)。
-
 ### 功能
 
 - 搜索漫画源，添加时与库内已有漫画查重（相似名字需要再次确认）
@@ -143,6 +141,7 @@ Kavita 只有在 `KAVITA_BASE_URL`、`KAVITA_EXPOSE_URL`、`KAVITA_ADMIN_APIKEY`
 2. **目录权限**：旧容器以 root 运行，新容器以 uid 1000 运行，执行一次 `chown -R 1000:1000` 你的三个目录。
 3. **构建并运行**：`docker build -t vanmanga .`，然后按上文 `docker run` 运行。容器内的数据路径与 Flask 版相同（`/vanmanga/eng_config`、`/vanmanga/thumbnails`、`/downloaded`），原来的挂载可以原样沿用。
 4. **环境变量**：
+   - `LIB_PATH` 改名为 `LIBRARY_FILE`：新版只读取 `LIBRARY_FILE`。如果旧部署用 `LIB_PATH` 指定了非默认位置的漫画库，必须改用 `LIBRARY_FILE` 指向同一个文件，否则新版找不到它，会新建一个空漫画库（旧文件不会被改动）。
    - 删除 `MANGA_BASE_URL`、`MANGA_BASE_WEBSOCKET_URL`：已不再读取，前端通过同源的 `GET /api/config` 获取配置。
    - `PYTHONUNBUFFERED` 不再需要（后端不读取它，留着也无害）。
    - `KAVITA_*`、`FLARESOLVERR_URL`、`NUMBER_OF_WORKERS` 含义不变，照旧设置。
@@ -171,8 +170,6 @@ Tom "Van" Wang & Kun "Alen" Qi
 ## English
 
 VanManga is a self-hosted manga scraper and library manager. It searches a manga source (currently [DogeManga](https://dogemanga.com/), source name `dgmanga`), adds titles to a library, downloads them chapter by chapter into zip archives, checks for updates every day, and works with the [Kavita](https://github.com/Kareadita/Kavita) reader.
-
-> The web UI is being rebuilt in Vue 3. The backend API is stable and documented in [`docs/api-contract.md`](docs/api-contract.md).
 
 ### Features
 
@@ -301,6 +298,7 @@ Kavita is enabled only when `KAVITA_BASE_URL`, `KAVITA_EXPOSE_URL` and `KAVITA_A
 2. **Ownership**: the old container ran as root, the new one runs as uid 1000; run `chown -R 1000:1000` on the three directories once.
 3. **Build and run**: `docker build -t vanmanga .`, then `docker run` as above. The data paths inside the container are the same as in the Flask version (`/vanmanga/eng_config`, `/vanmanga/thumbnails`, `/downloaded`), so the existing mounts carry over unchanged.
 4. **Environment variables**:
+   - Rename `LIB_PATH` to `LIBRARY_FILE`: the new version reads only `LIBRARY_FILE`. If the old deployment used `LIB_PATH` to put the library somewhere other than the default, point `LIBRARY_FILE` at the same file, or the new version will not find it and will create an empty library (the old file is left untouched).
    - Remove `MANGA_BASE_URL` and `MANGA_BASE_WEBSOCKET_URL`: they are no longer read; the frontend gets its configuration from the same-origin `GET /api/config`.
    - `PYTHONUNBUFFERED` is no longer needed (the backend does not read it; leaving it set is harmless).
    - `KAVITA_*`, `FLARESOLVERR_URL` and `NUMBER_OF_WORKERS` mean the same as before.

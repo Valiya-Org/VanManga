@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { join, resolve, sep } from 'path';
 import configuration from './configuration';
 
@@ -69,6 +70,27 @@ describe('configuration: security.adminToken', () => {
   it('reads ADMIN_TOKEN', () => {
     process.env.ADMIN_TOKEN = 's3cret';
     expect(configuration().security.adminToken).toBe('s3cret');
+  });
+});
+
+describe('configuration: legacy LIB_PATH', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+    jest.restoreAllMocks();
+  });
+
+  it('warns when the Flask-era LIB_PATH is set without LIBRARY_FILE', () => {
+    const warn = jest.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+    process.env.LIB_PATH = '/old/lib.json';
+    delete process.env.LIBRARY_FILE;
+    configuration();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('LIB_PATH'), 'Configuration');
+
+    warn.mockClear();
+    process.env.LIBRARY_FILE = '/old/lib.json';
+    configuration();
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

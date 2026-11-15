@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { dirname, join, resolve } from 'path';
 
 export interface AppConfig {
@@ -77,6 +78,14 @@ export default (): AppConfig => {
   const libraryFile = resolve(
     process.env.LIBRARY_FILE ?? './eng_config/manga_library.json',
   );
+  if (process.env.LIB_PATH && !process.env.LIBRARY_FILE) {
+    // Flask read LIB_PATH; ignoring it silently would start an empty library.
+    Logger.warn(
+      `LIB_PATH is set but no longer read; using ${libraryFile}. ` +
+        'Rename it to LIBRARY_FILE if your library lives elsewhere.',
+      'Configuration',
+    );
+  }
 
   return {
     port: parseInt(process.env.PORT ?? '5000', 10),
