@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { defineComponent, h, type Component } from 'vue';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
@@ -57,4 +58,11 @@ export async function click(el: Element | undefined | null): Promise<void> {
   if (!el) throw new Error('click(): element not found');
   (el as HTMLElement).click();
   await flushPromises();
+}
+
+/** Waits until `text` appears anywhere in the document (toasts mount async). */
+export async function waitForText(text: string): Promise<void> {
+  await vi.waitFor(() => {
+    if (!bodyText().includes(text)) throw new Error(`"${text}" not shown`);
+  });
 }
