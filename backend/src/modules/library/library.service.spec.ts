@@ -184,6 +184,24 @@ describe('LibraryService.deleteManga', () => {
     expect(t.thumbnails.remove).not.toHaveBeenCalled();
   });
 
+  it('reports the manga as gone while its folder is being removed (m13)', async () => {
+    const t = setup([stored()]);
+    let duringRemove: boolean | undefined;
+    t.fsService.removeDir.mockImplementationOnce(async () => {
+      duringRemove = t.svc.has('E8uHNgs8');
+    });
+    await t.svc.deleteManga('E8uHNgs8');
+    expect(duringRemove).toBe(false);
+    expect(t.svc.has('E8uHNgs8')).toBe(false);
+  });
+
+  it('reports the manga again when the folder removal failed and the record was kept', async () => {
+    const t = setup([stored()]);
+    t.fsService.removeDir.mockRejectedValueOnce(new Error('EBUSY'));
+    await t.svc.deleteManga('E8uHNgs8');
+    expect(t.svc.has('E8uHNgs8')).toBe(true);
+  });
+
   it('throws NotFound for an unknown manga', async () => {
     const t = setup();
     await expect(t.svc.deleteManga('nope')).rejects.toBeInstanceOf(NotFoundException);

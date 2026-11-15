@@ -24,6 +24,8 @@ export interface AddMangaOutcome {
 export class LibraryService {
   private readonly logger = new Logger(LibraryService.name);
   private readonly downloadRoot: string;
+  /** Ids whose deleteManga is in progress. */
+  private readonly deleting = new Set<string>();
 
   constructor(
     private readonly repo: LibraryRepository,
@@ -51,8 +53,11 @@ export class LibraryService {
     return manga;
   }
 
+  /** False while the manga is being deleted, so no download can be queued
+   *  for it (DownloadService) or recreate its folder (orchestrator) between
+   *  the delete's busy check and the record's removal. */
   has(mangaId: string): boolean {
-    return this.repo.has(mangaId);
+    return this.repo.has(mangaId) && !this.deleting.has(mangaId);
   }
 
   checkDuplicates(name: string): DuplicateCheckResponseDto {
@@ -123,18 +128,22 @@ export class LibraryService {
       mangaFolderName(manga.manga_name, mangaId),
     );
 
+    this.deleting.add(mangaId);
     try {
-      if (await this.fsService.exists(folder)) {
-        await this.fsService.removeDir(folder);
+      try {
+        if (await this.fsService.exists(folder)) {
+          await this.fsService.removeDir(folder);
+        }
+      } catch (err) {
+        this.logger.error(
+          `Failed to remove manga folder ${folder}: ${(err as Error).message}`,
+        );
+        return false;
       }
-    } catch (err) {
-      this.logger.error(
-        `Failed to remove manga folder ${folder}: ${(err as Error).message}`,
-      );
-      return false;
+      await this.repo.remove(mangaId);
+    } finally {
+      this.deleting.delete(mangaId);
     }
-
-    await this.repo.remove(mangaId);
     await this.thumbnails.remove(mangaId);
     this.logger.log(`=== MANGA DELETED: ${manga.manga_name} (${mangaId}) ===`);
     return true;

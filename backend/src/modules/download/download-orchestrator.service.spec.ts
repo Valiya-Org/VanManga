@@ -53,6 +53,7 @@ function setup(
       deleted = true;
       return true;
     }),
+    has: jest.fn(() => !deleted),
   };
   const events = {
     emitDmcaAlert: jest.fn(),
@@ -344,6 +345,15 @@ describe('DownloadOrchestratorService — parity with the Flask pipeline', () =>
       '第68-第69话',
     );
     expect(t.record().last_epi_name).toBe('第68-第69话');
+  });
+
+  it('does not recreate the folder of a manga deleted while its task was scraping', async () => {
+    const t = setup(newManga(), ['第1话']);
+    // deleted after the task read the record, before any chapter came down
+    t.library.has.mockReturnValue(false);
+    await expect(t.runFull()).rejects.toThrow(/removed from the library/);
+    expect(t.fsService.ensureMangaTree).not.toHaveBeenCalled();
+    expect(t.library.patch).not.toHaveBeenCalled();
   });
 
   it.each([[''], ['   '], ['.'], ['..'], [' .. ']])(

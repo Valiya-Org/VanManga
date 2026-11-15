@@ -228,6 +228,12 @@ export class DownloadOrchestratorService implements OnModuleInit {
     options: { updateLastEpi?: boolean } = {},
   ): Promise<number> {
     const updateLastEpi = options.updateLastEpi ?? true;
+    // The manga may have been deleted while this task was scraping (the
+    // delete's busy check ran before the task was queued): do not recreate
+    // its folder as an orphan.
+    if (!this.library.has(manga.manga_id)) {
+      throw new Error(`${manga.manga_id} was removed from the library; not downloading`);
+    }
     const tree = await this.fsService.ensureMangaTree(
       manga.manga_name,
       manga.manga_id,
