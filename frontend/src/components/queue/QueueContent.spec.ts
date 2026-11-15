@@ -24,7 +24,7 @@ describe('QueueContent', () => {
     expect(w.find('[data-testid="queue-active"]').exists()).toBe(false);
   });
 
-  it('shows the running task with chapter position, current chapter and progress', async () => {
+  it('shows the running task with finished chapters and progress', async () => {
     const w = await mountQueue(() => {
       useLibraryStore().items = [
         makeManga({ manga_id: 'm1', manga_name: '一拳超人', last_epi_name: '第3话 拳' }),
@@ -38,9 +38,15 @@ describe('QueueContent', () => {
     });
     const active = w.find('[data-testid="queue-active"]');
     expect(active.text()).toContain('一拳超人');
-    expect(active.text()).toContain('第 4 / 10 话');
-    expect(active.text()).toContain('当前：第3话 拳');
-    expect(active.find('[data-testid="progress-bar"]').attributes('aria-valuenow')).toBe('3');
+    // Counts finished chapters, like the card's "下载中 3 / 10 话".
+    expect(active.text()).toContain('已完成 3 / 10 话');
+    // No chapter name: the API has no "chapter in progress" field, and
+    // last_epi_name is the newest finished chapter, not the current one.
+    expect(active.text()).not.toContain('当前');
+    expect(active.text()).not.toContain('第3话 拳');
+    const bar = active.find('[data-testid="progress-bar"]');
+    expect(bar.attributes('aria-valuenow')).toBe('3');
+    expect(bar.attributes('aria-label')).toBe('《一拳超人》下载进度');
   });
 
   it('lists waiting tasks in order with what they will do', async () => {

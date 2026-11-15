@@ -30,14 +30,12 @@ function scope(task: TaskSummary): string {
 
 const active = computed(() => queue.active);
 const progress = computed(() => queue.activeProgress);
-const current = computed(() => {
-  const id = active.value?.mangaId;
-  return id ? (library.byId(id)?.last_epi_name ?? '') : '';
-});
-const position = computed(() => {
+// Counts finished chapters, the same number the library card shows. The API
+// has no "chapter in progress" field, so no chapter name is shown here.
+const counted = computed(() => {
   const p = progress.value;
   if (!p?.total) return null;
-  return { at: Math.min(p.done + 1, p.total), total: p.total };
+  return { done: p.done, total: p.total };
 });
 
 const connection = computed(() => {
@@ -63,16 +61,14 @@ const connection = computed(() => {
         <div class="space-y-2 rounded-lg bg-vm-card p-3">
           <p class="truncate font-medium" :title="title(active)">{{ title(active) }}</p>
           <p class="truncate text-xs text-vm-muted">
-            <template v-if="position">第 {{ position.at }} / {{ position.total }} 话</template>
+            <template v-if="counted">已完成 {{ counted.done }} / {{ counted.total }} 话</template>
             <template v-else>{{ scope(active) }}</template>
-            <template v-if="current">
-              · 当前：<span class="text-vm-accent">{{ current }}</span>
-            </template>
           </p>
           <ProgressBar
             v-if="active.kind !== 'rezip'"
             :done="progress?.done ?? 0"
             :total="progress?.total ?? null"
+            :label="`《${title(active)}》下载进度`"
           />
         </div>
       </section>
