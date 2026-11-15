@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AppConfig } from '../../config/configuration';
@@ -36,10 +36,10 @@ import {
  *   - download_chapter_task (TaskKind.REDOWNLOAD)
  *   - re_zip_task (TaskKind.REZIP)
  *
- *  Self-registers with TaskQueueService on module init so the queue
- *  can drive it without holding a hard reference. */
+ *  Self-registers with TaskQueueService at application bootstrap so the
+ *  queue can drive it without holding a hard reference. */
 @Injectable()
-export class DownloadOrchestratorService implements OnModuleInit {
+export class DownloadOrchestratorService implements OnApplicationBootstrap {
   private readonly logger = new Logger(DownloadOrchestratorService.name);
   private readonly chapterConcurrency: number;
   /** A chapter with this many failed images is abandoned rather than
@@ -67,7 +67,17 @@ export class DownloadOrchestratorService implements OnModuleInit {
     });
   }
 
-  onModuleInit(): void {
+  /** The queue cannot run a task before this, so registering here is what
+   *  keeps tasks — above all the ones restored from queue.json — from
+   *  starting before LibraryRepository has loaded the library.
+   *
+   *  Not onModuleInit: DownloadModule is @Global(), and Nest runs the
+   *  onModuleInit hooks of global modules before those of every other
+   *  module, so here that hook ran before LibraryRepository.onModuleInit
+   *  read the file, and each restored task failed with "Unknown manga" and
+   *  was dropped. onApplicationBootstrap runs only after every module's
+   *  onModuleInit (including the asynchronous library load) has resolved. */
+  onApplicationBootstrap(): void {
     this.queue.registerExecutor((payload) => this.dispatch(payload));
   }
 

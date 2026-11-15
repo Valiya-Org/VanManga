@@ -53,7 +53,9 @@ export class TaskQueueService implements OnModuleInit {
   }
 
   /** Restore synchronously so the queue is complete before anything can
-   *  enqueue (boot scan, add requests) and dedupe against it. */
+   *  enqueue (boot scan, add requests) and dedupe against it. Nothing runs
+   *  yet: the executor is registered in onApplicationBootstrap, after the
+   *  library has loaded (see DownloadOrchestratorService). */
   onModuleInit(): void {
     const restored = this.readPersisted();
     if (restored.length === 0) return;
@@ -63,8 +65,9 @@ export class TaskQueueService implements OnModuleInit {
     void this.drain();
   }
 
-  /** Bound by DownloadOrchestratorService at module init.
-   *  Decouples the queue from the orchestrator (no circular DI). */
+  /** Bound by DownloadOrchestratorService.onApplicationBootstrap; until
+   *  then the queue only collects tasks. Decouples the queue from the
+   *  orchestrator (no circular DI). */
   registerExecutor(executor: TaskExecutor): void {
     if (this.executor) {
       throw new Error('TaskQueueService executor already registered');

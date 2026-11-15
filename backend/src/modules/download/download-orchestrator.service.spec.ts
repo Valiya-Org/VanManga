@@ -107,7 +107,7 @@ function setup(
     events as never,
     { get: jest.fn(() => 1) } as never,
   );
-  svc.onModuleInit();
+  svc.onApplicationBootstrap();
   // Backoff waits are real time in production; skip them in tests.
   const sleep = jest
     .spyOn(svc as unknown as { sleep: (ms: number) => Promise<void> }, 'sleep')
