@@ -102,6 +102,11 @@ export class FilesystemService {
     await fs.rm(path, { recursive: true, force: true });
   }
 
+  /** Remove one file; a missing file is not an error. */
+  async removeFile(path: string): Promise<void> {
+    await fs.rm(path, { force: true });
+  }
+
   getDownloadRoot(): string {
     return this.downloadRoot;
   }

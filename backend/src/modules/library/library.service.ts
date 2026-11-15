@@ -135,6 +135,7 @@ export class LibraryService {
     }
 
     await this.repo.remove(mangaId);
+    await this.thumbnails.remove(mangaId);
     this.logger.log(`=== MANGA DELETED: ${manga.manga_name} (${mangaId}) ===`);
     return true;
   }

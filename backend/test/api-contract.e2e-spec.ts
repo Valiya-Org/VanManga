@@ -170,6 +170,9 @@ describe('Canonical API contract (e2e)', () => {
       .set('X-Admin-Token', ADMIN_TOKEN)
       .expect(200, { code: 200, data: true });
     await http().delete('/api/library/-e2e2').set('X-Admin-Token', ADMIN_TOKEN).expect(200);
+    // the covers go with the records
+    expect(existsSync(join(dir, 'thumbnails', '-e2e1.jpg'))).toBe(false);
+    expect(existsSync(join(dir, 'thumbnails', '-e2e2.jpg'))).toBe(false);
 
     const after = await http().get('/api/library').expect(200);
     expect(after.body).toEqual({ code: 200, data: [] });

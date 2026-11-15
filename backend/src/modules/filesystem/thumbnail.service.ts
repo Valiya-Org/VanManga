@@ -58,6 +58,17 @@ export class ThumbnailService {
     return file;
   }
 
+  /** Best-effort removal of a deleted manga's cover; never throws. */
+  async remove(mangaId: string): Promise<void> {
+    const file = join(this.dir, `${mangaId}.jpg`);
+    if (resolve(dirname(file)) !== resolve(this.dir)) return;
+    try {
+      await this.fsService.removeFile(file);
+    } catch (err) {
+      this.logger.warn(`Could not remove cover ${file}: ${(err as Error).message}`);
+    }
+  }
+
   async readThumbnail(mangaId: string): Promise<Buffer> {
     const path = await this.getThumbnailPath(mangaId);
     return this.fsService.readFile(path);

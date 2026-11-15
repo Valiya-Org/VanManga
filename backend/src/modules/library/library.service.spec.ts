@@ -52,6 +52,7 @@ function setup(existing: Manga[] = []) {
       ...m,
       thumbnail: `http://host/api/library/${m.manga_id}/thumbnail`,
     })),
+    remove: jest.fn(async () => undefined),
   };
   const fsService = {
     exists: jest.fn(async () => true),
@@ -164,6 +165,7 @@ describe('LibraryService.deleteManga', () => {
       join(DOWNLOAD_ROOT, 'A・S・Gグループフタコマ漫画劇場$E8uHNgs8'),
     );
     expect(t.store.has('E8uHNgs8')).toBe(false);
+    expect(t.thumbnails.remove).toHaveBeenCalledWith('E8uHNgs8');
   });
 
   it('removes the on-disk folder of a manga whose name contains a slash', async () => {
@@ -179,6 +181,7 @@ describe('LibraryService.deleteManga', () => {
     t.fsService.removeDir.mockRejectedValueOnce(new Error('EBUSY'));
     await expect(t.svc.deleteManga('E8uHNgs8')).resolves.toBe(false);
     expect(t.store.has('E8uHNgs8')).toBe(true);
+    expect(t.thumbnails.remove).not.toHaveBeenCalled();
   });
 
   it('throws NotFound for an unknown manga', async () => {
