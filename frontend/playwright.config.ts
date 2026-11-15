@@ -23,7 +23,7 @@ export default defineConfig({
   projects: [
     // `npm run test:e2e` — the smoke flow (also in CI).
     { name: 'smoke', testMatch: /smoke\.e2e\.ts/, use: { ...devices['Desktop Chrome'] } },
-    // `npm run screenshots` — review screenshots into docs/review/.
+    // `npm run screenshots` — review screenshots into frontend/screenshots/ (git-ignored).
     { name: 'screenshots', testMatch: /screenshots\.e2e\.ts/, use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {

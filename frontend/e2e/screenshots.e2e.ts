@@ -2,8 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 // Review screenshots (not part of CI): library, search panel, queue drawer and
-// settings at desktop and phone widths, written to docs/review/p3b-screenshots/.
-const OUT = fileURLToPath(new URL('../../docs/review/p3b-screenshots/', import.meta.url));
+// settings at desktop and phone widths, written to frontend/screenshots/ (git-ignored).
+const OUT = fileURLToPath(new URL('../screenshots/', import.meta.url));
 
 const VIEWPORTS = [
   { name: '1280', width: 1280, height: 800 },

@@ -6,7 +6,6 @@
 
 - 接口契约：[`api-contract.md`](api-contract.md)
 - 前端数据层：[`frontend-data-layer.md`](frontend-data-layer.md)
-- 后端迁移审核：[`review/backend-parity.md`](review/backend-parity.md)
 - 人工测试清单：[`manual-test-checklist.md`](manual-test-checklist.md)
 - 逐方法说明（每个方法做什么、谁调用、复杂实现的解释）：后端与抓取器 [`architecture/backend.md`](architecture/backend.md)，前端 [`architecture/frontend.md`](architecture/frontend.md)
 
@@ -320,7 +319,7 @@ NestJS 后端（backend/，一个进程，端口 5000）
 | `e2e/start-backend.cjs` | 启动真实后端（`backend/dist`，同时托管 `frontend/dist`），使用临时数据目录和假抓取器；CI 中走生产入口 `dist/main.js`，本地用同一个 `createApp()`（只跳过信任库检查） |
 | `e2e/fake-scraper.cjs` | 假的 `scrape_cli.py`：固定返回几部候选，其中一部会"慢慢下载"，供截图展示进度和排队 |
 | `e2e/smoke.e2e.ts` | 冒烟用例（进 CI）：搜索 → 添加 → 库里出现 → 删除时先输错口令再输对 → 库里消失；同时检查 375px 宽度下不出现横向滚动、控制台没有意外报错 |
-| `e2e/screenshots.e2e.ts` | 生成评审截图到 `docs/review/p3b-screenshots/`（不进 CI） |
+| `e2e/screenshots.e2e.ts` | 生成评审截图到 `frontend/screenshots/`（不入库，不进 CI） |
 | `e2e/constants.ts` | 端到端共用的管理口令常量 |
 
 ## 7. 已知的限制

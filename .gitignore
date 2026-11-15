@@ -18,5 +18,8 @@ downloaded
 # brainstorming visual companion sessions
 /.superpowers/
 
+# root has no dependencies; a stray `npm install` here must not leave a lockfile
+/package-lock.json
+
 # macOS Finder metadata
 .DS_Store

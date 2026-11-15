@@ -1351,7 +1351,7 @@ Kavita 部分：
 ### `e2e/screenshots.e2e.ts`（项目 `screenshots`，不进 CI）
 
 - `beforeAll`：经真实 API 搜索（填充服务端缓存），以 `submit_sign: '1'` 添加 `-ui1`、`ui2`、`ui3`，轮询队列直到 `ui2` 正在运行且 `ui3` 在等待。`ui4` 不加入，用来展示"添加"按钮。
-- 对 1280px 和 375px 各拍：库（卡片）、库（列表）、搜索面板、队列、设置、⋯ 菜单，写入 `docs/review/p3b-screenshots/<名字>-<宽度>.png`；同时检查不出现横向滚动。
+- 对 1280px 和 375px 各拍：库（卡片）、库（列表）、搜索面板、队列、设置、⋯ 菜单，写入 `frontend/screenshots/<名字>-<宽度>.png`（不入库）；同时检查不出现横向滚动。
 
 ---
 

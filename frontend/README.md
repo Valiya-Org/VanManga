@@ -54,4 +54,4 @@ Nuxt UI 的 vite 插件在每次运行 vite/vitest 时生成 `auto-imports.d.ts`
 
 审阅用截图（1280px 与 375px，库、搜索面板、队列抽屉、设置）：
 
-    npm run screenshots                 # 写到 ../docs/review/p3b-screenshots/
+    npm run screenshots                 # 写到 screenshots/（不入库）
