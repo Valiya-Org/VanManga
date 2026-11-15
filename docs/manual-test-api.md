@@ -14,7 +14,7 @@
 | **实测，假 Kavita** | 同上，Kavita 由一个本地假服务代替（只模拟登录、刷新、插件认证、系列列表、扫描目录五个接口） |
 | **未实测，依据代码** | 本机做不到（真实源站、真实 Kavita、FlareSolverr、Linux 权限等），结论来自读代码和契约。每条都写了在真实环境里怎么复现 |
 
-本机实测用的是 `NestFactory.create` + `configureApp` + Swagger 的启动方式，和 `backend/src/main.ts` 一致（只是跳过了 Node 版本的信任库检查）。这一点很重要：同一份代码用 e2e 测试的 `Test.createTestingModule` 方式启动时，有三处行为不同（见[第 11 节](#diff)）。
+本机实测用的是 `NestFactory.create` + `configureApp` + Swagger 的启动方式，和 `backend/src/main.ts` 一致（只是跳过了 Node 版本的信任库检查）。这一点很重要：当时同一份代码用 e2e 测试的 `Test.createTestingModule` 方式启动时，有两处行为不同，另有一处（重启恢复）e2e 没覆盖（见[第 11 节](#diff) 第 1–3 条，均已修复）。修复后这套启动方式就是 `backend/src/bootstrap.ts` 的 `createApp()`，`main.ts`、后端 e2e、`frontend/e2e/start-backend.cjs` 都经过它；第 1–3 条相关的"实测"已在修复后的构建上重测（2026-11-15，提交 `37e9740`）。
 
 ---
 
@@ -83,11 +83,11 @@ URL 里的中文用百分号编码（例：`测试` → `%E6%B5%8B%E8%AF%95`）�
 | 场景 | 请求 | 预期状态码 | 预期响应体 | 还要检查什么 | ✓ |
 |---|---|---|---|---|---|
 | 方法不对 | `c -X PUT "$BASE/api/library" -H "$J" -d '{}'` | 404 | `{"code":404,"error":"not-found","message":"Cannot PUT /api/library"}` | 实测，假抓取器。不是 405 | [ ] |
-| 请求体不是合法 JSON | `c -X POST "$BASE/api/download" -H "$J" -d '{bad'` | **实测 404**；契约为 400 | 实测：`{"code":404,"error":"not-found","message":"Cannot POST /api/download"}`；契约：`{"code":400,"error":"bad-request","message":"Expected property name or '}' in JSON at position 1 (line 1 column 2)"}` | 实测，假抓取器。**与契约不一致**，见[第 11 节](#diff) 第 1 条 | [ ] |
-| 请求体是 JSON 的 `null` 或字符串 | `c -X POST "$BASE/api/library" -H "$J" -d 'null'`（或 `-d '"str"'`） | 实测 404 | `{"code":404,"error":"not-found","message":"Cannot POST /api/library"}` | 实测，假抓取器。body-parser 严格模式拒绝非对象/数组，原因同上 | [ ] |
+| 请求体不是合法 JSON | `c -X POST "$BASE/api/download" -H "$J" -d '{bad'` | 400 | `{"code":400,"error":"bad-request","message":"Expected property name or '}' in JSON at position 1 (line 1 column 2)"}` | 实测，假抓取器（修复后重测）。日志 `WARN [AllExceptionsFilter] [POST] /api/download -> 400: ...`。修复前是 404 `not-found`，见[第 11 节](#diff) 第 1 条 | [ ] |
+| 请求体是 JSON 的 `null` 或字符串 | `c -X POST "$BASE/api/library" -H "$J" -d 'null'`（或 `-d '"str"'`） | 400 | `{"code":400,"error":"bad-request","message":"Unexpected token 'n', \"null\" is not valid JSON"}`；字符串：`{"code":400,"error":"bad-request","message":"Unexpected token '\"', \"\"str\"\" is not valid JSON"}` | 实测，假抓取器（修复后重测）。body-parser 严格模式拒绝非对象/数组。修复前是 404，原因同上 | [ ] |
 | 请求体是 JSON 数组 | `c -X POST "$BASE/api/library" -H "$J" -d '[]'` | 400 | `{"code":400,"error":"validation-failed","message":"manga_id should not be empty; manga_id must be a string; source should not be empty; source must be a string"}` | 实测，假抓取器 | [ ] |
-| 请求体超过 1 MB | 见下方命令 | **实测 404**；契约为 413 | 实测：`{"code":404,"error":"not-found","message":"Cannot POST /api/download/chapters"}`；契约：`{"code":413,"error":"payload-too-large"}` | 实测，假抓取器（1,548,709 字节）。**与契约不一致**，见[第 11 节](#diff) 第 1 条。日志里只有一行 404 WARN | [ ] |
-| 请求体接近但不到 1 MB | 同上，但 `5000` 个章节、短标题（约 660 KB） | 404 | `{"code":404,"error":"manga-not-found","message":"Unknown manga: -nope"}` | 实测，假抓取器。说明正常解析了，只是 id 不存在 | [ ] |
+| 请求体超过 1 MB | 见下方命令 | 413 | `{"code":413,"error":"payload-too-large"}` | 实测，假抓取器（1,548,709 字节，修复后重测）。日志 `WARN [AllExceptionsFilter] [POST] /api/download/chapters -> 413: request entity too large`。修复前是 404 `not-found`，见[第 11 节](#diff) 第 1 条 | [ ] |
+| 请求体接近但不到 1 MB | 同上，但 `5000` 个章节、短标题（约 660 KB） | 404 | `{"code":404,"error":"manga-not-found","message":"Unknown manga: -nope"}` | 实测，假抓取器（修复后重测，章节 url 用 100 个字符，861,709 字节，结果相同）。说明正常解析了，只是 id 不存在 | [ ] |
 | 不带 `Content-Type` 或 `text/plain` | `c -X POST "$BASE/api/library" -H 'Content-Type: text/plain' -d '{"manga_id":"x","source":"dgmanga"}'` | 400 | `{"code":400,"error":"validation-failed","message":"manga_id should not be empty; manga_id must be a string; source should not be empty; source must be a string"}` | 实测，假抓取器。请求体被忽略，当作空对象 | [ ] |
 | 表单编码 | `c -X POST "$BASE/api/library" -d 'manga_id=x&source=dgmanga'`（curl 默认 `application/x-www-form-urlencoded`） | 410 | `{"code":410,"error":"search-expired","message":"Candidate no longer in the search cache; search again"}` | 实测，假抓取器。表单也会被解析（`app.setup.ts` 注册了 urlencoded 解析器），所以走到了缓存查找 | [ ] |
 | 多余字段 | 在任意请求体里加 `"x":1` | 与不加时相同 | — | 实测，假抓取器。`whitelist: true` 把未声明的字段丢掉，不报错 | [ ] |
@@ -712,7 +712,7 @@ HTTP 200 application/json; charset=utf-8
 | 中文标题写在 `-d` 里（Windows） | `-d '{"...","title":"第2话",...}'` | 200 | `taskId` | 实测：生成 `��2��.zip`。用文件发送 | [ ] |
 | 不在库里 | `{"manga_id":"nope","chapters":[{"index":1,"title":"t","url":"u"}]}` | 404 | `{"code":404,"error":"manga-not-found","message":"Unknown manga: nope"}` | 实测 | [ ] |
 | 很长的章节列表（约 660 KB） | 0.5 的"接近 1 MB"行 | 404 | `manga-not-found`（id 不存在） | 实测；正常解析 | [ ] |
-| 超过 1 MB | 0.5 的命令 | 实测 404，契约 413 | 见 0.5 | 见[第 11 节](#diff) 第 1 条 | [ ] |
+| 超过 1 MB | 0.5 的命令 | 413 | `{"code":413,"error":"payload-too-large"}` | 实测（修复后重测）；修复前是 404，见[第 11 节](#diff) 第 1 条 | [ ] |
 | 源站 url 失效 | 真实环境用一个错的 url | 200 | — | 未实测；`download_completed` 应为 `failed`，不产生 zip | [ ] |
 
 <a id="get-queue"></a>
@@ -766,7 +766,7 @@ c "$BASE/api/download/current"
 <a id="restart"></a>
 ### 5.5 重启后的队列恢复
 
-**实测与契约不一致**（见[第 11 节](#diff) 第 3 条）。
+修复前与契约不一致（见[第 11 节](#diff) 第 3 条），已在提交 `37e9740` 修复。
 
 步骤（实测，假抓取器）：
 
@@ -774,11 +774,14 @@ c "$BASE/api/download/current"
 2. 强杀后端（`kill -9`，容器里用 `docker kill`）。
 3. 用同一数据目录启动。
 
+修复后的重测没有走第 1、2 步，而是直接预置了强杀后会留下的文件：库里 `a1`、`b2`（已完成、`download_switch: 1`，启动扫描跳过）和 `c3`（未完成）；`queue.json` 依次为 `full-manga a1`、`full-manga gone`（库里没有）、`redownload b2`。用后端自带的 `fake-cli.cjs`，经 `createApp()` 启动。`backend/test/queue-restore.e2e-spec.ts` 做的是同一件事。
+
 | 场景 | 请求 | 预期状态码 | 预期响应体 | 还要检查什么 | ✓ |
 |---|---|---|---|---|---|
 | 队列文件被读取 | 看启动日志 | — | `Restored 3 task(s) from .../queue.json` | 实测 | [ ] |
-| 恢复的任务真正执行 | 启动后 `c "$BASE/api/download/queue"` | 200 | 契约：被打断的 `slow3 full-manga` 在队首，后面是 `redownload slow3`、`full-manga img2` | **实测不符**：三个任务在库加载之前就开始运行，全部立刻失败，日志 `task[full-manga, slow3] failed: Unknown manga: slow3`（`redownload slow3`、`full-manga img2` 同样），然后才是 `Loaded 4 manga from ...`。之后只有启动扫描把未完成的 `slow3` 重新入队；**重下任务丢失** | [ ] |
-| 真实环境复现 | 下载一部长漫画到一半 `docker restart` | — | — | 未实测于 Node 24 / 容器。看日志 `Restored N task(s)` 之后是否紧跟 `failed: Unknown manga` | [ ] |
+| 恢复的任务真正执行 | 看启动日志；之后 `c "$BASE/api/download/queue"` | 200 | 被打断的任务在队首，其余按原顺序，都在启动扫描入队的任务之前 | 实测（修复后重测）。日志顺序：`Restored 3 task(s)` → `Loaded 3 manga from ...` → `Started task[full-manga, a1]` → `Boot scan started` → `Enqueued task[full-manga, c3] (queue size=3)` → `DOWNLOAD DONE: Rig a1` → `Started task[full-manga, gone]` → `task[full-manga, gone] failed: Unknown manga: gone` → `Started task[redownload, b2]` → `REDOWNLOAD DONE: Rig b2` → `Started task[full-manga, c3]` → `DOWNLOAD DONE: Rig c3`。之后 `{"code":200,"data":{"active":null,"pending":[]}}`，`queue.json` 为 `{"version":1,"tasks":[]}`。修复前三个恢复的任务在 `Loaded ... manga` 之前就以 `Unknown manga` 失败，重下任务丢失 | [ ] |
+| 恢复的任务对应的漫画已删除 | 同上的 `full-manga gone` | — | 记为失败、跳过，队列继续 | 实测（修复后）：一行 `ERROR ... failed: Unknown manga: gone`，下一个任务紧接着开始 | [ ] |
+| 真实环境复现 | 下载一部长漫画到一半 `docker restart` | — | — | 未实测于 Node 24 / 容器。日志里 `Loaded N manga` 应在第一个 `Started task[...]` 之前，不应出现已在库里的漫画 `failed: Unknown manga` | [ ] |
 | 重启后搜索缓存为空 | 重启后直接添加之前搜到的漫画 | 410 | `{"code":410,"error":"search-expired","message":"Candidate no longer in the search cache; search again"}` | 实测 | [ ] |
 | 重启后已在库的漫画 | 重启后添加 `img2` | 409 | `already-in-library`，`kavita_url` 已由启动同步填上 | 实测 | [ ] |
 | `queue.json` 损坏 | 把文件改成 `xx` 后启动 | — | 启动正常，文件被改名为 `queue.json.corrupt-<秒>`，队列为空 | 未实测，依据代码与清单 1.5 | [ ] |
@@ -866,27 +869,27 @@ A=$(curl -s "$BASE/" | grep -o 'assets/index-[^"]*\.js' | head -1)
 curl -sS -o /dev/null -w 'HTTP %{http_code} %{content_type} %{size_download}B\n' "$BASE/$A"
 ```
 
-真实响应（实测）：`HTTP 200 text/javascript; charset=utf-8`；响应头有 `ETag`、`Last-Modified`、`Cache-Control: public, max-age=0`。
+真实响应（实测，修复后重测）：`HTTP 200 text/javascript; charset=utf-8`；响应头有 `ETag`、`Last-Modified`、`Cache-Control: public, max-age=0`。文件由 `configureApp` 里的 `app.useStaticAssets(frontend/dist, { index: false })` 提供（修复前是 `@nestjs/serve-static`）。
 
 | 场景 | 请求 | 预期状态码 | 预期响应体 | 还要检查什么 | ✓ |
 |---|---|---|---|---|---|
-| 存在的资源 | 如上 | 200 | JS 内容 | 实测 | [ ] |
-| HEAD | `curl -sI "$BASE/$A"` | 200 | 无响应体 | 实测 | [ ] |
-| `favicon.ico` | `curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' "$BASE/favicon.ico"` | 200 | `image/vnd.microsoft.icon`，15086 字节 | 实测 | [ ] |
-| 不存在的资源 | `curl -sS -w '\n%{http_code} %{content_type}\n' "$BASE/assets/nope.js"` | **实测 200 `text/html`**（返回 `index.html`）；`frontend-static.e2e-spec.ts` 期望 404 | — | **与测试期望不一致**，见[第 11 节](#diff) 第 2 条 | [ ] |
-| 不存在的图片 | `.../nope.png` | 实测 200 `text/html` | `index.html` | 同上 | [ ] |
+| 存在的资源 | 如上 | 200 | JS 内容 | 实测（修复后重测） | [ ] |
+| HEAD | `curl -sI "$BASE/$A"` | 200 | 无响应体 | 实测（修复后重测） | [ ] |
+| `favicon.ico` | `curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' "$BASE/favicon.ico"` | 200 | `image/vnd.microsoft.icon`，15086 字节 | 实测（修复后重测） | [ ] |
+| 不存在的资源 | `curl -sS -w '\n%{http_code} %{content_type}\n' "$BASE/assets/nope.js"` | 404 | `{"code":404,"error":"not-found","message":"Cannot GET /assets/nope.js"}` | 实测（修复后重测）。修复前是 200 `text/html`（`index.html`），见[第 11 节](#diff) 第 2 条 | [ ] |
+| 不存在的图片 | `.../nope.png` | 404 | `{"code":404,"error":"not-found","message":"Cannot GET /nope.png"}` | 实测（修复后重测）；修复前同上 | [ ] |
 | `frontend/dist` 不存在 | 删掉构建产物后启动 | — | 记录实际结果 | 未实测 | [ ] |
 
 <a id="spa"></a>
 ### 7.2 SPA 回退
 
-`spaFallback` 对没有扩展名、不以 `/api/` 或 `/socket.io` 开头的 GET 返回 `index.html`。
+`spaFallback` 对没有扩展名、不以 `/api/` 或 `/socket.io` 开头的 GET/HEAD 返回 `index.html`。带扩展名的路径从不回退到 `index.html`（见 7.1）。
 
 ```bash
 c "$BASE/settings" | head -3
 ```
 
-真实响应（实测）：
+真实响应（实测，修复后重测；`/mainpage/mangaku`、`/some/deep/route`、`HEAD /settings`、`POST /settings`、`/api` 也已重测，结果同下表）：
 
 ```
 <!DOCTYPE html>
@@ -900,14 +903,14 @@ HTTP 200 text/html; charset=utf-8
 | 根路径 | `c "$BASE/"` | 200 | `index.html`（518 字节） | 实测 | [ ] |
 | 旧书签 | `c "$BASE/mainpage/mangaku"` | 200 | `index.html` | 实测；浏览器里应跳到漫画库 | [ ] |
 | 深层路径 | `c "$BASE/some/deep/route"` | 200 | `index.html` | 实测 | [ ] |
-| HEAD | `curl -sI "$BASE/settings"` | 200 | 无响应体 | 实测 | [ ] |
+| HEAD | `curl -sI "$BASE/settings"` | 200 | 无响应体 | 实测（修复前由 `@nestjs/serve-static` 的兜底路由应答，修复后由 `spaFallback`） | [ ] |
 | POST | `c -X POST "$BASE/settings"` | 404 | `{"code":404,"error":"not-found","message":"Cannot POST /settings"}` | 实测 | [ ] |
 | 不带斜杠的 `/api` | `c "$BASE/api"` | 实测 200 `text/html` | `index.html` | 实测；`/api` 不以 `/api/` 开头，被当成页面路由。见[第 11 节](#diff) 第 5 条 | [ ] |
 
 <a id="docs"></a>
 ### 7.3 `GET /api/docs`、`GET /api/docs-json`
 
-Swagger 界面和 OpenAPI 文档，由 `main.ts` 注册（e2e 测试的启动方式不注册，`frontend/e2e/start-backend.cjs` 的非 `E2E_BACKEND_MAIN` 方式也不注册）。
+Swagger 界面和 OpenAPI 文档，由 `bootstrap.ts` 的 `createApp()` 注册，所以 `main.ts`、后端 e2e、`frontend/e2e/start-backend.cjs` 启动的后端都有。
 
 ```bash
 c "$BASE/api/docs" | head -5
@@ -971,7 +974,7 @@ HTTP 200 text/plain; charset=UTF-8
 | `library/short` | `c "$BASE/api/library/short"` | 404 | `{"code":404,"error":"not-found","message":"Cannot GET /api/library/short"}` | 实测 | [ ] |
 | `library/search` | `c "$BASE/api/library/search?q=x"` | 404 | `{"code":404,"error":"not-found","message":"Cannot GET /api/library/search?q=x"}` | 实测 | [ ] |
 | `library/paginate` | `c "$BASE/api/library/paginate?page=1"` | 404 | `{"code":404,"error":"not-found","message":"Cannot GET /api/library/paginate?page=1"}` | 实测 | [ ] |
-| `/js/config.js` | `c "$BASE/js/config.js"` | 契约 404 | **实测 200 `text/html`，返回 `index.html`** | **与契约不一致**，见[第 11 节](#diff) 第 2 条。至少确认响应里没有 `window.MANGA_BASE_URL` | [ ] |
+| `/js/config.js` | `c "$BASE/js/config.js"` | 404 | `{"code":404,"error":"not-found","message":"Cannot GET /js/config.js"}` | 实测（修复后重测）。修复前是 200 `text/html`（`index.html`），见[第 11 节](#diff) 第 2 条。确认响应里没有 `window.MANGA_BASE_URL` | [ ] |
 | 旧环境变量无效 | 设 `MANGA_BASE_URL=http://x` 启动 | — | 行为不变 | 依据代码（不再读取） | [ ] |
 | 旧 Socket 事件 | 见第 10 节 | — | 永远收不到 `downloading_info`、`response`、`complete_info` | 实测：整个测试过程中 `onAny` 没收到这三个 | [ ] |
 
@@ -1090,24 +1093,28 @@ queue_updated        {"active":{...slow3 running},"pending":[]}
 <a id="diff"></a>
 ## 11. 实测与契约不一致之处
 
-`docs/api-contract.md` 没有改动；下面每条都需要决定是改代码还是改契约。
+`docs/api-contract.md` 没有改动；下面每条都需要决定是改代码还是改契约。第 1–3 条已改代码修复（保留原记录，后附根因与修复）；第 4 条起仍待决定。
 
-1. **非法 JSON 和超过 1 MB 的请求体返回 404 `not-found`，不是 400 `bad-request` / 413 `payload-too-large`**（契约 §1.3 最后一段）。
-   - 实测（`NestFactory.create` 启动，同 `main.ts`）：`-d '{bad'` → `{"code":404,"error":"not-found","message":"Cannot POST /api/download"}`；1.5 MB 请求体 → `{"code":404,"error":"not-found","message":"Cannot POST /api/download/chapters"}`；JSON `null`、`"str"` 同样是 404。
+1. **【已修复，提交 `d3fcf0b`】非法 JSON 和超过 1 MB 的请求体返回 404 `not-found`，不是 400 `bad-request` / 413 `payload-too-large`**（契约 §1.3 最后一段）。
+   - 当时实测（`NestFactory.create` 启动，同 `main.ts`）：`-d '{bad'` → `{"code":404,"error":"not-found","message":"Cannot POST /api/download"}`；1.5 MB 请求体 → `{"code":404,"error":"not-found","message":"Cannot POST /api/download/chapters"}`；JSON `null`、`"str"` 同样是 404。
    - 用 e2e 的方式（`Test.createTestingModule(...).compile()` + `createNestApplication`）启动同一份 `dist`，结果是契约写的 413 和 400。所以 `api-contract.e2e-spec.ts` 的 413 用例通过，但生产启动方式不符合。
-   - 可能的原因：`@nestjs/serve-static` 5.0.5 的 `ExpressLoader` 注册了一个错误中间件，对 `exclude` 里的路径（`/api{/*path}`）把**任何**错误改写成 `NotFoundException("Cannot <METHOD> <url>")`。body-parser 的错误先到了这个中间件。两种启动方式下中间件的注册顺序不同。
-   - 真实环境复现：容器里执行 0.5 节的两条命令。
+   - 根因（已确认，读 `node_modules/@nestjs/serve-static/dist` 并打印两种启动方式下的 Express 中间件栈）：`@nestjs/serve-static` 5.0.5 的 `ExpressLoader` 注册了一个错误中间件，对 `exclude` 里的路径（`/api{/*path}`）把**任何**错误改写成 `NotFoundException("Cannot <METHOD> <url>")`，body-parser 的 400/413 先到了这个中间件。不是注册顺序不同：用 `Test.createTestingModule` 时，提供者在 `compile()` 里、HTTP 适配器存在之前就被实例化，`serveStaticProviders` 的工厂因此选了 `NoopLoader`，整个模块什么都不注册（连静态文件都不提供），所以 e2e 看不到问题。
+   - 修复：去掉 `@nestjs/serve-static`，`configureApp` 在 `spaFallback` 之后用 `app.useStaticAssets(frontend/dist, { index: false, fallthrough: true })` 提供静态文件；请求体错误直接交给 `AllExceptionsFilter`。另外（提交 `bbb447a`）后端 e2e 改为经 `src/bootstrap.ts` 的 `createApp()` 启动，与 `main.ts` 同一条路径，`api-contract.e2e-spec.ts` 新增非法 JSON、`null`、字符串请求体的 400 用例。
+   - 修复后重测：400 `bad-request`、413 `payload-too-large`，见 0.5 节。
 
-2. **`/js/config.js` 和不存在的静态资源返回 200 `index.html`**（契约 §5 写 404；`frontend-static.e2e-spec.ts` 也期望 `/js/config.js`、`/assets/missing-abc.js` 是 404）。
-   - 实测：`/js/config.js`、`/assets/nope.js`、`/nope.png` 都是 `200 text/html`。e2e 方式启动则是 404 JSON。
-   - 可能的原因：`ServeStaticModule` 自己的 `renderPath`（默认 `*`）兜底返回 `index.html`，在生产启动方式下排在 Nest 的 404 处理之前。
-   - 影响：浏览器缓存了旧版前端时，请求到的旧资源名会拿到 HTML，控制台报 MIME 错误而不是 404。
+2. **【已修复，提交 `d3fcf0b`】`/js/config.js` 和不存在的静态资源返回 200 `index.html`**（契约 §5 写 404；`frontend-static.e2e-spec.ts` 也期望 `/js/config.js`、`/assets/missing-abc.js` 是 404）。
+   - 当时实测：`/js/config.js`、`/assets/nope.js`、`/nope.png` 都是 `200 text/html`。e2e 方式启动则是 404 JSON。
+   - 根因（已确认）：同一个 `ExpressLoader` 还注册了兜底的 `GET {*any}`（`renderPath` 默认值），对所有不在 `exclude` 里、静态中间件没找到的 GET 返回 `index.html`；它排在 Nest 的 404 处理之前。e2e 方式下同样因为 `NoopLoader` 而不存在。
+   - 影响（修复前）：浏览器缓存了旧版前端时，请求到的旧资源名会拿到 HTML，控制台报 MIME 错误而不是 404。
+   - 修复：同第 1 条。`spaFallback` 只给不带扩展名的 GET/HEAD 返回 `index.html`（新增 HEAD，原先 `HEAD /settings` 的 200 是那个兜底路由给的），带扩展名而找不到的文件落到 Nest 的 404。`frontend-static.e2e-spec.ts` 改为生产启动方式，并覆盖真实资源、`/assets/nope.js`、`/nope.png`、`/js/config.js`、`/settings`、`/mainpage/mangaku`、`HEAD /settings`。
+   - 修复后重测：见 7.1、7.2 节和第 8 节 `/js/config.js` 行。
 
-3. **重启后恢复的任务全部失败并被丢弃**（契约 §3.4："状态持久化到磁盘，重启后恢复（运行中被打断的任务回到队首）"）。
-   - 实测日志顺序：`Restored 3 task(s)` → `Started task[full-manga, slow3]` → `failed: Unknown manga: slow3` → …（另外两个同样）→ `Loaded 4 manga from ...`。
-   - 原因：`TaskQueueService.onModuleInit` 同步恢复后立即 `drain()`，而这时 `LibraryRepository.onModuleInit`（异步加载库文件）还没执行；`DownloadOrchestratorService` 注册执行器时队列就开始跑了。
-   - 后果：恢复的 `redownload` 任务永久丢失；`full-manga` 任务只有在漫画 `completed: false` 时才会被启动扫描重新入队，已完成但有新章节的连载要等启动扫描查到新章节才会重新入队（这一条实际会发生，只是时机不同）。
-   - 清单 1.5 的"下载进行中重启容器：重启后队列恢复"一项预计在真实环境也会失败。
+3. **【已修复，提交 `37e9740`】重启后恢复的任务全部失败并被丢弃**（契约 §3.4："状态持久化到磁盘，重启后恢复（运行中被打断的任务回到队首）"）。
+   - 当时实测日志顺序：`Restored 3 task(s)` → `Started task[full-manga, slow3]` → `failed: Unknown manga: slow3` → …（另外两个同样）→ `Loaded 4 manga from ...`。
+   - 根因（已确认）：`DownloadModule` 是 `@Global()` 模块。Nest 把全局模块的"距离"设为最大值，最先调用它们的 `onModuleInit`，早于 `LibraryModule`（尽管 `DownloadModule` 导入了 `LibraryModule`）。`DownloadOrchestratorService.onModuleInit` 登记执行器后队列立即开始执行恢复的任务，而 `LibraryRepository.onModuleInit`（异步读库文件）还没开始。原先的注释和文档以为"被导入的模块先初始化"，对全局模块不成立。
+   - 后果（修复前）：恢复的 `redownload` 任务永久丢失；`full-manga` 任务只有在漫画 `completed: false` 时才会被启动扫描重新入队。
+   - 修复：执行器改在 `DownloadOrchestratorService.onApplicationBootstrap` 登记。Nest 在所有模块的 `onModuleInit`（含异步读库）都结束后才调用它，所以队列在库加载之前不可能开始执行。恢复仍在 `TaskQueueService.onModuleInit`，恢复的任务仍排在启动扫描入队的任务之前。新增 `backend/test/queue-restore.e2e-spec.ts`（预置库和 `queue.json`，经 `createApp()` 真实启动）防回归。
+   - 修复后重测：见 5.5 节。清单 1.5 的"下载进行中重启容器：重启后队列恢复"仍需在真实环境确认。
 
 4. **`GET /api/scraper/:source/chapter-images` 不带 `url` 时不返回 400**。契约没写这个接口的参数校验（Swagger 标了 `required: true`）。实测空值被直接传给抓取进程；假抓取器返回了 200，真实抓取器预计是 502 `scraper-failed`。
 
@@ -1131,7 +1138,7 @@ queue_updated        {"active":{...slow3 running},"pending":[]}
 <a id="appendix-a"></a>
 ## 附录 A：本地假抓取器环境
 
-用于复现标「实测，假抓取器」的行。需要先在 `backend/` 和 `frontend/` 里各执行一次 `npm run build`（`cd` 进目录执行）。本机 Node 低于 24.22.1 时 `backend/dist/main.js` 会因信任库检查拒绝启动，所以下面的启动脚本照 `frontend/e2e/start-backend.cjs` 的做法直接加载 `AppModule`，并像 `main.ts` 一样挂上 Swagger。
+用于复现标「实测，假抓取器」的行。需要先在 `backend/` 和 `frontend/` 里各执行一次 `npm run build`（`cd` 进目录执行）。本机 Node 低于 24.22.1 时 `backend/dist/main.js` 会因信任库检查拒绝启动，所以下面的启动脚本照 `frontend/e2e/start-backend.cjs` 的做法直接调用 `main.ts` 用的 `createApp()`（`backend/dist/bootstrap.js`），只跳过信任库检查。
 
 `frontend/e2e/start-backend.cjs` 本身也能用（`PORT=5480 node frontend/e2e/start-backend.cjs`），但它把 `ADMIN_TOKEN` 写死成"没设就用 `e2e-admin-token`"，测不了无口令的配置，假抓取器也只有成功路径，所以这里另外准备了一套。四个文件放在仓库外的任意目录（下例为 `~/vm-rig`），端口用 5400 以上的空闲端口。
 
@@ -1239,20 +1246,16 @@ http.createServer((req, res) => {
 'use strict';
 const { join } = require('node:path');
 const D = process.env.BACKEND_DIST;
-const fromBackend = (id) => require(require.resolve(id, { paths: [D] }));
-fromBackend('reflect-metadata');
-const { NestFactory } = fromBackend('@nestjs/core');
-const { SwaggerModule } = fromBackend('@nestjs/swagger');
-const { AppModule } = require(join(D, 'app.module.js'));
-const { configureApp } = require(join(D, 'app.setup.js'));
-const { buildSwaggerDocument } = require(join(D, 'swagger.js'));
+require(require.resolve('reflect-metadata', { paths: [D] }));
+// createApp() = NestFactory.create + configureApp + Swagger, the same function main.js uses
+const { createApp } = require(join(D, 'bootstrap.js'));
 (async () => {
-  const app = await NestFactory.create(AppModule, { bodyParser: false, logger: ['log', 'error', 'warn', 'debug'] });
-  configureApp(app);
-  SwaggerModule.setup('api/docs', app, buildSwaggerDocument(app));
+  const app = await createApp({ logger: ['log', 'error', 'warn', 'debug'] });
   await app.listen(Number(process.env.PORT));
 })().catch((e) => { console.error(e); process.exit(1); });
 ```
+
+（提交 `bbb447a` 之前的构建没有 `bootstrap.js`，当时的脚本手动执行 `NestFactory.create(AppModule, { bodyParser: false, ... })` → `configureApp(app)` → `SwaggerModule.setup('api/docs', app, buildSwaggerDocument(app))`，效果相同。）
 
 `start.sh`（用法：`bash start.sh <数据目录>`，额外的配置用环境变量传入）：
 
@@ -1312,3 +1315,4 @@ CORS_ORIGINS='https://a.example, https://b.example' ADMIN_TOKEN=test-admin-token
 - 运行：配置 A（端口 5461，`PYTHON_TIMEOUT_MS=8000`，`SEARCH_CACHE_TTL_MS=30000`，假 Kavita），中途强杀并在同一数据目录重启一次；配置 B（无口令、无 Kavita、预置两条旧记录）；配置 C（`CORS_ORIGINS`，Kavita 指向无人监听的 5463）。
 - Socket 观察：附录 A 之外另用一个 `socket.io-client` 4.8.3 脚本记录 `onAny` 的全部事件，一个客户端贯穿全程，另一个中途加入。
 - 测完已停掉所有进程，删除了临时数据目录。
+- 修复第 11 节第 1–3 条后的重测：同日，提交 `37e9740` 的构建，附录 A 新版 `boot.cjs`（`createApp()`），端口 5461，无口令、无 Kavita，抓取器用 `backend/src/modules/scraper/python/__fixtures__/fake-cli.cjs`。重测了 0.5 节的非法 JSON、`null`/字符串、超过 1 MB、接近 1 MB、数组、`PUT`；5.2 节的超过 1 MB；5.5 节（预置 `queue.json` 启动）；7.1、7.2、7.3、7.4 节；第 8 节 `/js/config.js`。其余各行未在修复后重测（相关代码未改动）。

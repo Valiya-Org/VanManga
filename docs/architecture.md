@@ -91,9 +91,10 @@ NestJS 后端（backend/，一个进程，端口 5000）
 
 | 文件 | 作用 |
 |---|---|
-| `src/main.ts` | 进程入口。启动前检查 Node 内置的证书信任库里是否还有已被吊销的根证书，有则拒绝启动；创建应用、调用 `configureApp`、挂 Swagger（`/api/docs`）、监听端口 |
+| `src/main.ts` | 进程入口。启动前检查 Node 内置的证书信任库里是否还有已被吊销的根证书，有则拒绝启动；用 `createApp()` 建应用，监听端口 |
+| `src/bootstrap.ts` | `createApp()`：`NestFactory.create` → `configureApp` → 挂 Swagger（`/api/docs`）。`main.ts`、后端 e2e 测试、前端 Playwright 用的后端（`frontend/e2e/start-backend.cjs`）都经过它，测试装配出的应用与生产完全相同 |
 | `src/app.module.ts` | 根模块，装配下面所有模块 |
-| `src/app.setup.ts` | `configureApp`：请求体上限 1 MB、全局前缀 `/api`、校验管道、异常过滤器、日志拦截器、可选跨域、单页回退中间件。`main.ts` 和 e2e 测试共用，保证两边行为一致 |
+| `src/app.setup.ts` | `configureApp`：请求体上限 1 MB、全局前缀 `/api`、校验管道、异常过滤器、日志拦截器、可选跨域、单页回退中间件、`frontend/dist` 静态文件 |
 | `src/swagger.ts` | 生成 OpenAPI 文档，声明 `X-Admin-Token` 请求头 |
 | `src/config/configuration.ts` | 把环境变量读成类型化的 `AppConfig`：存储路径、下载调优、搜索缓存、Kavita、Cloudflare、安全、Python。数值型变量写错会在启动时报出变量名并停止；设了旧的 `LIB_PATH` 而没设 `LIBRARY_FILE` 时告警 |
 | `src/config/config.module.ts` | 全局注册配置 |
@@ -151,7 +152,7 @@ NestJS 后端（backend/，一个进程，端口 5000）
 | `download-orchestrator.service.ts` | 单个任务的完整流程。整部下载：取元数据 → 章节列表 → 跳过已下载 → 下载 → 更新记录；重下：只处理选中的章节；重新打包：遍历下载目录。还负责：章节页 429 的等待重试、章节之间 2–5 秒的间隔、失败图片过多的章节整章放弃并删掉半成品目录、下架（DMCA，抓取器返回 504）时删除漫画并推送 `dmca_alert`——注意当前 Python 抓取器从不返回 504，下架页面会表现为 501，所以这条路径目前实际走不到、章节名清理（为空或为 `.`/`..` 时回退成"第N话"）、任务开始与结束的 Socket 推送 |
 | `image-downloader.service.ts` | 下载一个章节的全部图片：可配置并发、每张之间的礼貌延迟、遇 429 时统一退避（冷却时间挂在单例服务上，整个进程内所有正在下载的章节共用）、长章节定时输出进度日志 |
 | `chapter-title.ts` | 章节名改写规则，逐条对应旧的 `utils/chapter_title_reformat.py`（如 `第68-69话` → `第68-第69话`、`v2` → `v$2`），保证新旧压缩包命名一致，Kavita 才能正确解析 |
-| `queue/task-queue.service.ts` | 先进先出、并发为 1 的任务队列。入队去重（同一漫画的同类任务合并，重下任务合并章节）；每次变化写 `queue.json` 并发 `queue.changed`；启动时同步恢复队列，逐项校验，读不了或格式不对的文件改名留存 |
+| `queue/task-queue.service.ts` | 先进先出、并发为 1 的任务队列。入队去重（同一漫画的同类任务合并，重下任务合并章节）；每次变化写 `queue.json` 并发 `queue.changed`；启动时同步恢复队列，逐项校验，读不了或格式不对的文件改名留存。执行器由下载编排器在 `onApplicationBootstrap` 里登记，所以恢复的任务要等漫画库读入之后才开始 |
 | `queue/task.types.ts` | 任务种类（整部、重下、重新打包）、载荷、队列快照、对外的任务摘要 |
 | `dto/submit-download.dto.ts` | 两个下载接口的请求体校验 |
 | `__fixtures__/chapter-title-reformat.json` | 章节名改写的对照样例（由旧 Python 实现生成） |
@@ -197,8 +198,8 @@ NestJS 后端（backend/，一个进程，端口 5000）
 
 | 文件 | 作用 |
 |---|---|
-| `frontend.module.ts` | 用 `ServeStaticModule` 提供 `frontend/dist` 下的静态文件（不自动返回 `index.html`） |
-| `spa-fallback.ts` | 中间件：对不带扩展名、且不是 `/api` 或 `/socket.io` 的 GET 请求返回 `index.html`，让前端路由生效，同时不遮住带哈希的静态资源 |
+| `frontend.module.ts` | `frontend/dist` 的路径（`STATIC_ROOT`）和 `GET /api/config`。静态文件由 `configureApp` 里的 `app.useStaticAssets` 提供（不自动返回 `index.html`，找不到文件时得到 404） |
+| `spa-fallback.ts` | 中间件：对不带扩展名、且不是 `/api` 或 `/socket.io` 的 GET/HEAD 请求返回 `index.html`，让前端路由生效，同时不遮住静态资源 |
 | `frontend.controller.ts` | `GET /api/config`：返回 `kavitaEnabled`、`kavitaExposeUrl`、`adminRequired` |
 
 ### 3.10 后端测试
@@ -208,7 +209,8 @@ NestJS 后端（backend/，一个进程，端口 5000）
 | `src/**/*.spec.ts`（27 个） | 各服务、控制器、守卫、过滤器的单元测试 |
 | `test/api-contract.e2e-spec.ts` | 启动完整应用（假抓取器），逐项核对接口契约：信封、状态码、错误字符串、口令保护、已删除的旧接口确实返回 404 |
 | `test/cors.e2e-spec.ts` | 默认不带跨域头；设了 `CORS_ORIGINS` 后只放行列出的来源 |
-| `test/frontend-static.e2e-spec.ts` | 静态文件、单页回退、`index.html` 可访问 |
+| `test/frontend-static.e2e-spec.ts` | 静态文件、单页回退、`index.html` 可访问；不存在的资源和 `/js/config.js` 是 404 |
+| `test/queue-restore.e2e-spec.ts` | 预置库文件和 `queue.json` 后启动：恢复的任务按顺序、在启动扫描的任务之前执行，库里已没有的漫画被跳过 |
 | `test/jest-e2e.json` | e2e 的 Jest 配置 |
 
 ## 4. Python 抓取器
@@ -315,7 +317,7 @@ NestJS 后端（backend/，一个进程，端口 5000）
 | `src/test/fake-server.ts` | 测试替身：替换 axios 的传输层，真实的实例、拦截器和接口函数照常运行；支持延迟应答以模拟并发 |
 | `src/test/fixtures.ts` | 生成测试用的 `Manga` 与搜索候选 |
 | `src/test/mount.ts` | 在 `<UApp>` 里挂载组件，并提供在整个文档里找文字、找按钮、点击的辅助函数 |
-| `e2e/start-backend.cjs` | 启动真实后端（`backend/dist`，同时托管 `frontend/dist`），使用临时数据目录和假抓取器；CI 中走生产入口 `dist/main.js` |
+| `e2e/start-backend.cjs` | 启动真实后端（`backend/dist`，同时托管 `frontend/dist`），使用临时数据目录和假抓取器；CI 中走生产入口 `dist/main.js`，本地用同一个 `createApp()`（只跳过信任库检查） |
 | `e2e/fake-scraper.cjs` | 假的 `scrape_cli.py`：固定返回几部候选，其中一部会"慢慢下载"，供截图展示进度和排队 |
 | `e2e/smoke.e2e.ts` | 冒烟用例（进 CI）：搜索 → 添加 → 库里出现 → 删除时先输错口令再输对 → 库里消失；同时检查 375px 宽度下不出现横向滚动、控制台没有意外报错 |
 | `e2e/screenshots.e2e.ts` | 生成评审截图到 `docs/review/p3b-screenshots/`（不进 CI） |

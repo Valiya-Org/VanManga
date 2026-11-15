@@ -186,7 +186,7 @@ index.html #app
 
 - `plugins: [vue(), ui(uiOptions)]`：Vue 单文件组件 + Nuxt UI 的 Vite 插件（纯 Vue 模式，自动导入 `U*` 组件和 `useToast` 等）。
 - `resolve.alias['@']` → `./src`。
-- `base: '/'`，`build.outDir: 'dist'`，`emptyOutDir: true`。后端 `ServeStaticModule` 提供的就是这个 `frontend/dist`。
+- `base: '/'`，`build.outDir: 'dist'`，`emptyOutDir: true`。后端 `configureApp` 里的静态中间件（`app.useStaticAssets`）提供的就是这个 `frontend/dist`。
 - `server.port: 5173`；`server.proxy`：`/api` → `http://localhost:5000`（`changeOrigin: true`），`/socket.io` → 同一地址（`ws: true`）。所以开发时前端代码也只用同源相对路径。
 
 ### `vitest.config.ts`
@@ -1324,7 +1324,7 @@ Kavita 部分：
 
 - 建临时目录 `vanmanga-ui-e2e-*`，设置环境变量：`NODE_ENV=test`、`PORT`（缺省 5480）、`ADMIN_TOKEN`（缺省 `e2e-admin-token`）、`LIBRARY_FILE`、`QUEUE_FILE`、`DOWNLOAD_ROOT`、`THUMBNAILS_DIR` 指向临时目录；`PYTHON_EXECUTABLE` 为当前 node、`PYTHON_CLI_SCRIPT` 为 `fake-scraper.cjs`（用后端已有的配置点替换抓取器）；清空 Kavita 与 FlareSolverr 相关变量。
 - 进程退出时删除临时目录；`SIGINT` / `SIGTERM` 时正常退出以触发清理。
-- `E2E_BACKEND_MAIN=1`（CI 中设置）：直接 `require('backend/dist/main.js')`，走生产入口。否则像后端 e2e 测试那样手动 `NestFactory.create(AppModule)` + `configureApp`，不挂 Swagger。注释说明原因：`main.js` 在 Node 版本低于 `.nvmrc` 时会因 TLS 信任库检查拒绝启动，而假抓取器不做任何外部请求，这项检查在这里无关。
+- `E2E_BACKEND_MAIN=1`（CI 中设置）：直接 `require('backend/dist/main.js')`，走生产入口。否则调用 `backend/dist/bootstrap.js` 的 `createApp()`（`main.js` 和后端 e2e 测试用的同一个函数，含 Swagger）后 `listen`，只跳过信任库检查。注释说明原因：`main.js` 在 Node 版本低于 `.nvmrc` 时会因 TLS 信任库检查拒绝启动，而假抓取器不做任何外部请求，这项检查在这里无关。
 - 调用方：`playwright.config.ts` 的 `webServer.command`。
 
 ### `e2e/fake-scraper.cjs`

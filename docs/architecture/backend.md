@@ -57,7 +57,7 @@
 | `DownloadModule` | 是 | `HttpModule.register({ timeout: 30_000, maxRedirects: 5 })`、`LibraryModule`、`ScraperModule` | `TaskQueueService`、`ImageDownloaderService`、`DownloadOrchestratorService`、`DownloadService` | `DownloadController` | `DownloadService`、`TaskQueueService` |
 | `KavitaModule` | 否 | `HttpModule.register({ timeout: 15_000, maxRedirects: 3 })`、`LibraryModule` | `KavitaService` | `KavitaController` | `KavitaService` |
 | `SchedulerModule` | 否 | `ScheduleModule.forRoot()`、`LibraryModule`、`ScraperModule`、`DownloadModule`、`KavitaModule` | `SchedulerService` | — | — |
-| `FrontendModule` | 否 | `ConfigModule`（来自 `@nestjs/config`）、`ServeStaticModule.forRoot({ rootPath: STATIC_ROOT, exclude: ['/api{/*path}'], serveStaticOptions: { index: false, fallthrough: true } })` | — | `FrontendController` | — |
+| `FrontendModule` | 否 | `ConfigModule`（来自 `@nestjs/config`） | — | `FrontendController` | —（静态文件不经模块，由 `configureApp` 注册的 Express 中间件提供，见第 12 节） |
 
 依赖要点：
 
@@ -115,26 +115,30 @@
 | `GET /api/scraper/:source/chapter-images?url=` | `ScraperController.chapterImages` | `ScraperService.getChapterImages`（同上） | |
 | `POST /api/kavita/login` | `KavitaController.login` | `KavitaService.login` | |
 | `POST /api/kavita/refreshtoken` | `KavitaController.refreshToken` | `KavitaService.refreshToken` | |
-| `GET /api/docs` | Swagger UI | `main.ts` 里 `SwaggerModule.setup('api/docs', …)` | |
+| `GET /api/docs` | Swagger UI | `bootstrap.ts → createApp` 里 `SwaggerModule.setup('api/docs', …)` | |
 
-不在 Nest 路由里的请求：`/socket.io`（Socket.IO）、带扩展名的静态文件（`ServeStaticModule`）、不带扩展名的其他 GET（`spaFallback` 返回 `index.html`）。
+不在 Nest 路由里的请求：`/socket.io`（Socket.IO）、不带扩展名的其他 GET/HEAD（`spaFallback` 返回 `index.html`）、`frontend/dist` 里存在的文件（`app.useStaticAssets`）。其余（包括不存在的 `/assets/*.js`、`/js/config.js`）落到 Nest 的 404，输出 `not-found` 信封。
 
 ### 0.5 启动顺序与生命周期钩子
 
 | 钩子 | 所在 | 做什么 |
 |---|---|---|
-| `bootstrap()` | `main.ts` | 信任库检查 → 建应用 → `configureApp` → Swagger → `listen` |
+| `bootstrap()` | `main.ts` | 信任库检查 → `createApp()`（建应用 → `configureApp` → Swagger）→ `listen` |
+| `onModuleInit` | `TaskQueueService` | 同步读 `queue.json` 恢复队列（只放进 `pending`，还没有执行器，不会开始执行） |
 | `onModuleInit`（async） | `LibraryRepository` | 读入或新建 `manga_library.json`；失败则抛错，进程退出 |
 | `onModuleInit` | `SourceRegistryService` | 登记抓取源，重名则抛错 |
-| `onModuleInit` | `TaskQueueService` | 同步读 `queue.json` 恢复队列，然后 `drain()` |
-| `onModuleInit` | `DownloadOrchestratorService` | `queue.registerExecutor(...)`，然后队列开始执行 |
-| `onModuleInit`（async） | `SchedulerService` | 后台 Kavita 同步；`setImmediate` 后台启动扫描 |
+| `onModuleInit`（async） | `SchedulerService` | 后台 Kavita 同步；`setImmediate` 后台启动扫描（入队的任务排在恢复的任务后面） |
+| `onApplicationBootstrap` | `DownloadOrchestratorService` | `queue.registerExecutor(...)`，然后队列开始执行 |
 | `afterInit` | `EventsGateway` | 写一行日志 |
 | `@Cron('0 30 1 * * *', { name: 'daily-scan' })` | `SchedulerService.handleDailyScan` | 每天 01:30:00 扫描 |
 | `@Interval('kavita-sync', 6 * 60 * 60 * 1000)` | `SchedulerService.handleKavitaSync` | 每 6 小时 Kavita 同步 |
 | 动态 `setInterval`（键 `cf-monitor`，720 000 ms） | `SchedulerService.ensureCfMonitor` | 检测到 Cloudflare 验证后每 12 分钟复查 |
 
-Nest 按模块依赖顺序调用 `onModuleInit`（被导入的模块先初始化），并等待返回的 Promise。`DownloadModule` 导入了 `LibraryModule`，所以队列恢复后的任务开始执行时，库已经读入。`TaskQueueService` 与 `DownloadOrchestratorService` 在同一模块，谁先初始化都能工作：`drain()` 要求 `active` 为空且已有执行器，缺一个就直接返回，另一个初始化时再调用一次 `drain()`。
+Nest 逐个模块调用 `onModuleInit` 并等待返回的 Promise，顺序按模块的"距离"从大到小：被导入的模块先于导入它的模块，但**全局模块的距离固定为最大值，最先初始化**（`@nestjs/core` 的 `scanner.js`、`nest-application-context.js`）。`DownloadModule` 是全局模块，所以它的 `onModuleInit` 早于 `LibraryModule`，虽然它导入了 `LibraryModule`。所有模块的 `onModuleInit` 都结束后，Nest 才调用 `onApplicationBootstrap`。
+
+因此执行器在 `onApplicationBootstrap` 里注册：这时 `LibraryRepository` 一定已经读完库文件，队列里的任务（包括从 `queue.json` 恢复的）不可能在库加载前开始。恢复仍放在 `onModuleInit`，先于任何入队（启动扫描、请求），所以恢复的任务排在启动期间入队的任务前面，并参与去重。`drain()` 要求 `active` 为空且已有执行器，缺一个就直接返回；注册执行器时再调用一次 `drain()`。
+
+（修复前执行器在 `DownloadOrchestratorService.onModuleInit` 注册，恢复的任务在库加载前就开始，全部以 `Unknown manga` 失败并被丢弃，重下任务永久丢失。由 `test/queue-restore.e2e-spec.ts` 防回归。）
 
 ---
 
@@ -142,21 +146,34 @@ Nest 按模块依赖顺序调用 `onModuleInit`（被导入的模块先初始化
 
 ### `main.ts`
 
-进程入口。单测：无（启动流程由 e2e 通过 `configureApp` 间接覆盖，但 e2e 不经过 `main.ts`）。
+进程入口。单测：无（除信任库检查和 `listen` 外，启动流程就是 `createApp`，由 e2e 覆盖）。
 
 #### `bootstrap(): Promise<void>`（文件内函数，未导出）
 
 - **作用**：
   1. 调用 `findRevokedRoots()`；若 Node 内置信任库里仍有被吊销的根证书，抛出 `Error`，信息为 `Node ${process.version} trusts revoked root(s): … Upgrade to Node 22.23.4 / 24.22.1 / 26.12.1 or later.`。
-  2. `NestFactory.create<NestExpressApplication>(AppModule, { logger: ['log','error','warn','debug','verbose'], bodyParser: false })`。
-  3. `configureApp(app)`。
-  4. `SwaggerModule.setup('api/docs', app, buildSwaggerDocument(app))`。
-  5. 读配置 `port`（默认 5000），`app.listen(port)`，打两行日志。
+  2. `createApp({ logger: ['log','error','warn','debug','verbose'] })`（见 `bootstrap.ts`）。
+  3. 读配置 `port`（默认 5000），`app.listen(port)`（`listen` 内部调用 `app.init()`），打两行日志。
 - **调用方**：文件末尾 `bootstrap().catch(...)`：任何错误写 `Fatal bootstrap error` 日志后 `process.exit(1)`。
 - **实现说明**：
   - 信任库检查的理由（注释）：抓取与 Kavita 的出站请求依赖 Node 自带的 CA 列表，浏览器的吊销机制（CRLSet/OneCRL）管不到它，所以发现被吊销的根证书时拒绝启动。
+  - `LibraryRepository.onModuleInit` 抛出的错误（库文件损坏）在 `app.listen` → `init` 期间冒出，走同一个 `catch`，进程退出。
+
+### `bootstrap.ts`
+
+生产环境装配应用的唯一入口。`main.ts`、四个后端 e2e 文件、`frontend/e2e/start-backend.cjs`（非 `E2E_BACKEND_MAIN` 模式）都用它，所以测试与生产装配出的是同一个应用。单测：无（e2e 覆盖）。
+
+#### `createApp(options?: Omit<NestApplicationOptions, 'bodyParser'>): Promise<NestExpressApplication>`
+
+- **作用**：
+  1. `NestFactory.create<NestExpressApplication>(AppModule, { ...options, bodyParser: false })`。
+  2. `configureApp(app)`。
+  3. `SwaggerModule.setup('api/docs', app, buildSwaggerDocument(app))`。
+  4. 返回 `app`，不调用 `init`/`listen`。
+- **调用方**：`main.ts → bootstrap`（传日志级别）；`test/*.e2e-spec.ts` 的 `beforeAll`（`{ logger: ['error'], abortOnError: false }`，随后 `await app.init()`）；`frontend/e2e/start-backend.cjs`（随后 `listen`）。
+- **实现说明**：
   - `bodyParser: false` 是必须的：`configureApp` 自己注册上限 1 MB 的解析器，替换 Express 默认 100 kb 的那个。
-  - `LibraryRepository.onModuleInit` 抛出的错误（库文件损坏）也在 `NestFactory.create` 期间冒出，走同一个 `catch`，进程退出。
+  - 不用 `Test.createTestingModule(...).compile()` + `createNestApplication` 的理由：那种方式在 HTTP 适配器存在之前就实例化所有提供者，行为与生产不同。实例：以前的 `@nestjs/serve-static` 在测试里退化成空操作的 `NoopLoader`，它在生产里造成的两个问题（见第 12 节）e2e 都没发现。
 
 ### `app.module.ts`
 
@@ -165,11 +182,11 @@ Nest 按模块依赖顺序调用 `onModuleInit`（被导入的模块先初始化
 #### `AppModule`
 
 - **作用**：按顺序导入所有模块；`EventEmitterModule.forRoot()` 在这里注册（默认选项）。
-- **调用方**：`main.ts → bootstrap`；三个 e2e 文件（`Test.createTestingModule({ imports: [AppModule] })`）。
+- **调用方**：`bootstrap.ts → createApp`。
 
 ### `app.setup.ts`
 
-把生产环境的 HTTP 管线集中在一个函数里，`main.ts` 和 e2e 共用，保证测试走的是同一条管线。单测：无（e2e 覆盖）。
+把生产环境的 HTTP 管线集中在一个函数里，由 `createApp` 调用。单测：无（e2e 覆盖）。
 
 #### `BODY_LIMIT = '1mb'`
 
@@ -185,8 +202,9 @@ Nest 按模块依赖顺序调用 `onModuleInit`（被导入的模块先初始化
   3. `app.setGlobalPrefix('api')`。
   4. `useGlobalPipes(createValidationPipe())`、`useGlobalFilters(new AllExceptionsFilter())`、`useGlobalInterceptors(new LoggingInterceptor())`。
   5. `app.use(spaFallback)`。
-- **调用方**：`main.ts → bootstrap`；`test/api-contract.e2e-spec.ts`、`test/cors.e2e-spec.ts`、`test/frontend-static.e2e-spec.ts` 的 `beforeAll`。
-- **实现说明**：`spaFallback` 在 `app.init()` 之前注册，所以排在 Nest 的 404 处理之前；它只处理不带扩展名、不以 `/api/`、`/socket.io` 开头的 GET，不会遮住接口和带哈希的静态资源。
+  6. `app.useStaticAssets(STATIC_ROOT, { index: false, fallthrough: true })`（Express 的 `express.static`）。
+- **调用方**：`bootstrap.ts → createApp`。
+- **实现说明**：两个中间件都在 `app.init()` 之前直接注册到 Express，所以排在 Nest 路由和 Nest 的 404 处理之前。`spaFallback` 只处理不带扩展名、不以 `/api/`、`/socket.io` 开头的 GET/HEAD，不会遮住接口和静态资源；静态中间件找不到文件时交给后面（最终是 Nest 的 404 `not-found` 信封），所以不存在的资源不会拿到 `index.html`。请求体解析错误（400、413）由 Nest 的异常处理交给 `AllExceptionsFilter`，中间没有别的错误中间件。
 
 ### `swagger.ts`
 
@@ -200,7 +218,7 @@ Nest 按模块依赖顺序调用 `onModuleInit`（被导入的模块先初始化
 #### `buildSwaggerDocument(app: INestApplication): OpenAPIObject`
 
 - **作用**：用 `DocumentBuilder` 设置标题 `VanManga API`、描述（信封格式）、版本 `0.2.0`、五个标签（`config`、`library`、`download`、`scraper`、`kavita`）、名为 `admin-token` 的 apiKey 安全方案（请求头 `X-Admin-Token`），再 `SwaggerModule.createDocument(app, config)`。各路由的说明来自控制器上的 `@ApiTags`、`@ApiOperation`、`@ApiSecurity('admin-token')` 等装饰器。
-- **调用方**：`main.ts → bootstrap`；`test/api-contract.e2e-spec.ts`（检查路由清单与安全声明）。
+- **调用方**：`bootstrap.ts → createApp`；`test/api-contract.e2e-spec.ts`（检查路由清单与安全声明）。
 
 ---
 
@@ -1019,14 +1037,14 @@ DogeManga 源。单测：无（经 `python-runner.service.spec.ts`、e2e 间接�
 
 #### `onModuleInit(): void`
 
-- **作用**：`readPersisted()` 同步读出恢复的任务；为空则返回；否则 `pending.unshift(...restored)`（放在初始化期间可能已入队的任务前面），写日志，`void this.drain()`。
-- **调用方**：由 Nest 在启动时调用。
-- **实现说明**：同步恢复的理由（注释）：在任何东西（启动扫描、添加请求）能入队之前，队列已经完整，入队去重才能和恢复的任务比对。这里不调用 `changed()`，恢复本身不写盘也不广播；紧接着的 `drain()`（若执行器已登记）开始任务时会写盘并广播。
+- **作用**：`readPersisted()` 同步读出恢复的任务；为空则返回；否则 `pending.unshift(...restored)`（放在初始化期间可能已入队的任务前面），写日志，`void this.drain()`（启动时执行器尚未登记，所以直接返回）。
+- **调用方**：由 Nest 在启动时调用（`DownloadModule` 是全局模块，早于 `LibraryModule`，见 0.5）。
+- **实现说明**：同步恢复的理由（注释）：在任何东西（启动扫描、添加请求）能入队之前，队列已经完整，入队去重才能和恢复的任务比对。这里不调用 `changed()`，恢复本身不写盘也不广播；执行器在 `onApplicationBootstrap` 登记后 `drain()` 开始任务时才写盘并广播。
 
 #### `registerExecutor(executor): void`
 
 - **作用**：登记执行器；已登记过则抛 `TaskQueueService executor already registered`；然后 `void this.drain()`。
-- **调用方**：`DownloadOrchestratorService.onModuleInit`。
+- **调用方**：`DownloadOrchestratorService.onApplicationBootstrap`。
 - **实现说明**：注释：用回调登记，队列不持有编排器的引用，避免循环依赖注入（编排器依赖队列）。
 
 #### `enqueue(payload): TaskHandle`
@@ -1211,10 +1229,11 @@ DogeManga 源。单测：无（经 `python-runner.service.spec.ts`、e2e 间接�
 | `maxChapterRateLimitRetries` | `5` | 章节页 429 的重试次数（对应 `main.py` 的 `g_error_count` 上限） |
 | `chapterRateLimitBaseMs` | `40_000` | 章节页 429 等待的基数（对应 `g_wait_time=40s`） |
 
-#### `onModuleInit(): void`
+#### `onApplicationBootstrap(): void`
 
 - **作用**：`queue.registerExecutor((payload) => this.dispatch(payload))`。
-- **调用方**：由 Nest 在启动时调用。
+- **调用方**：由 Nest 在所有模块的 `onModuleInit` 都结束之后调用。
+- **实现说明**：队列在登记执行器之前不会执行任何任务，所以在这里登记保证了任务（尤其是从 `queue.json` 恢复的）不会在 `LibraryRepository` 读完库文件之前开始。不能用 `onModuleInit`：`DownloadModule` 是全局模块，它的 `onModuleInit` 早于 `LibraryModule` 的（见 0.5）。恢复的任务若对应的漫画已不在库里，`library.get` 抛 `Unknown manga`，该任务记为失败，队列继续下一个。
 
 #### `dispatch(payload): Promise<void>`（私有）
 
@@ -1813,25 +1832,27 @@ Kavita 集成，替代 `utils/kavita_lib_pull.py` 与 `utils/kavita_scan_folder.
 
 ### `frontend/frontend.module.ts`
 
-用 `ServeStaticModule` 提供 Vue 构建产物。单测：无（`test/frontend-static.e2e-spec.ts` 覆盖）。
+定义 Vue 构建产物的位置和 `GET /api/config`。文件本身由 `configureApp` 注册的两个 Express 中间件提供：`spaFallback`（前端路由 → `index.html`）和 `app.useStaticAssets(STATIC_ROOT, { index: false, fallthrough: true })`（真实文件）。单测：无（`test/frontend-static.e2e-spec.ts` 覆盖）。
+
+不用 `@nestjs/serve-static` 的理由（`frontend.module.ts` 注释）：它 5.0.5 版的 `ExpressLoader` 在生产启动方式下额外注册了两样东西：一个兜底的 `GET {*any}`，把所有不在 `exclude` 里、静态中间件没找到的 GET（包括 `/assets/nope.js`、`/js/config.js`）答成 `index.html`；一个错误中间件，把 `exclude` 路径（`/api{/*path}`）上的**任何**错误改写成 `NotFoundException("Cannot <METHOD> <url>")`，于是 body-parser 的 400（非法 JSON、JSON `null`/字符串）和 413（超过 1 MB）都变成了 404。用 `Test.createTestingModule` 启动时，它的加载器在 HTTP 适配器存在之前就被创建，退化成 `NoopLoader`，什么都不注册，所以旧的 e2e 没发现。已在提交 `d3fcf0b` 中移除。
 
 #### `STATIC_ROOT`（导出常量）
 
 - **作用**：`resolve(__dirname, '..', '..', '..', '..', 'frontend', 'dist')`。运行时 `__dirname` 是 `backend/dist/modules/frontend`，向上四级是仓库根目录；在 ts-jest 下是 `backend/src/modules/frontend`，同样向上四级到根目录。镜像里目录结构与仓库相同（`/app/backend/dist/...` → `/app/frontend/dist`）。
-- **调用方**：`FrontendModule`（`rootPath`）、`spa-fallback.ts`。
+- **调用方**：`app.setup.ts → configureApp`（`useStaticAssets`）、`spa-fallback.ts`。
 
 #### `FrontendModule`
 
-- **作用**：`ServeStaticModule.forRoot({ rootPath: STATIC_ROOT, exclude: ['/api{/*path}'], serveStaticOptions: { index: false, fallthrough: true } })`；控制器 `FrontendController`。
-- **实现说明**：`index: false`：不自动返回 `index.html`，由 `spaFallback` 负责。`fallthrough: true`：找不到文件时交给后续处理（最终是 Nest 的 404）。
+- **作用**：导入 `ConfigModule`；控制器 `FrontendController`。
+- **实现说明**：`useStaticAssets` 的 `index: false`：不自动返回 `index.html`，由 `spaFallback` 负责。`fallthrough: true`：找不到文件时交给后续处理（最终是 Nest 的 404 `not-found` 信封）。
 
 ### `frontend/spa-fallback.ts`
 
 #### `spaFallback(req, res, next): void`
 
-- **作用**：满足四个条件时用 `res.sendFile(join(STATIC_ROOT, 'index.html'))` 返回单页入口：方法是 `GET`；路径不以 `/api/` 开头；不以 `/socket.io` 开头；没有扩展名（`path.extname` 为空）。发送失败（例如 `frontend/dist` 没构建）时 `next()`。其他请求直接 `next()`。
+- **作用**：满足四个条件时用 `res.sendFile(join(STATIC_ROOT, 'index.html'))` 返回单页入口：方法是 `GET` 或 `HEAD`；路径不以 `/api/` 开头；不以 `/socket.io` 开头；没有扩展名（`path.extname` 为空）。发送失败（例如 `frontend/dist` 没构建）时 `next()`。其他请求直接 `next()`。
 - **调用方**：Express，对每个请求（由 `configureApp` 用 `app.use` 注册）。单测：无（e2e 覆盖）。
-- **实现说明**（注释）：只处理不带扩展名的路径，所以带哈希的静态资源（如 `/assets/index-abc.js`）不会被 `index.html` 遮住，缺失的资源得到 404 而不是 HTML；也因为有这个门槛，它可以注册在 Nest 路由之前而不拦截接口。几个边界：路径恰好是 `/api`（没有结尾斜杠）会得到 `index.html`；前端路由里若含 `.`（如 `/library/a.b`）会被当成静态资源，得到 404；`HEAD` 请求不处理。
+- **实现说明**（注释）：只处理不带扩展名的路径，所以带哈希的静态资源（如 `/assets/index-abc.js`）不会被 `index.html` 遮住，缺失的资源得到 404 而不是 HTML；也因为有这个门槛，它可以注册在 Nest 路由之前而不拦截接口。几个边界：路径恰好是 `/api`（没有结尾斜杠）会得到 `index.html`；前端路由里若含 `.`（如 `/library/a.b`）会被当成静态资源，得到 404。
 
 ### `frontend/frontend.controller.ts`
 
@@ -1856,9 +1877,11 @@ Kavita 集成，替代 `utils/kavita_lib_pull.py` 与 `utils/kavita_scan_folder.
 
 Jest 配置：`rootDir: '.'`，匹配 `.e2e-spec.ts$`，`ts-jest` 转译，Node 环境，`@/` 映射到 `../src/`。由 `npm run test:e2e` 使用。
 
+四个文件都用 `src/bootstrap.ts` 的 `createApp({ logger: ['error'], abortOnError: false })` 加 `await app.init()` 启动，与 `main.ts` 走同一条装配路径（`NestFactory.create` + `configureApp` + Swagger），只少了信任库检查和 `listen`（supertest 直接用 `app.getHttpServer()`）。不再用 `Test.createTestingModule`：它与生产行为不同，曾掩盖了第 12 节所述的两个问题。`createApp` 在设置环境变量后才动态导入（`configuration()` 在构建模块图时读取环境变量）。四个文件都用临时目录存放库、队列、下载、封面，测完删除。
+
 ### `test/api-contract.e2e-spec.ts`
 
-在真实的 `AppModule` 上（`configureApp` 同生产）逐项核对接口契约。临时目录存放库、下载、封面；`PYTHON_EXECUTABLE` 设为 `process.execPath`、`PYTHON_CLI_SCRIPT` 设为 `fake-cli.cjs`；设 `ADMIN_TOKEN`；清空 Kavita 与 FlareSolverr 变量；`AppModule` 在设置环境变量后才动态导入（`configuration()` 在构建模块图时读取环境变量）。覆盖：`GET /api/config` 的内容；搜索（无结果为 `[]`、空 `q` 为 400 `query-required`、候选的 `thumbnail` 是缓存地址且能取到 JPEG）；添加（精简请求体、`already-in-library` 带 `data.manga`、相似标题 `duplicate` 及用 `submit_sign: '1'` 确认、未搜索过的 id 为 410 `search-expired`）；等待队列空闲后记录变为 `completed: true`、`updated_at` 与 `add_date` 的关系；通过监视 `EventsGateway.server.emit` 检查 `download_started`、`download_completed`（`chapters_total: 0`）、`queue_updated` 的内容，且没有七个规范事件以外的事件；封面、章节列表接口；库文件里存的是相对封面地址；删除的口令保护（缺失、错误、正确）、删除后封面文件被删、再删为 404；`queue.json` 写在库文件旁边且最终为 `{ version: 1, tasks: [] }`；`POST /api/library/rezip` 需要口令；默认不发 CORS 头（HTTP 预检、普通请求、Socket.IO 轮询）；未知路由与空请求体的失败信封；约 2000 章的重下请求体能被解析而超过 1 MB 的请求体得到 `{ code: 413, error: 'payload-too-large' }`；Swagger 文档包含全部规范路由、不含已删除的旧路由，两条受保护路由声明了 `admin-token` 安全方案。
+在生产装配的应用上逐项核对接口契约。`PYTHON_EXECUTABLE` 设为 `process.execPath`、`PYTHON_CLI_SCRIPT` 设为 `fake-cli.cjs`；设 `ADMIN_TOKEN`；清空 Kavita 与 FlareSolverr 变量。覆盖：`GET /api/config` 的内容；搜索（无结果为 `[]`、空 `q` 为 400 `query-required`、候选的 `thumbnail` 是缓存地址且能取到 JPEG）；添加（精简请求体、`already-in-library` 带 `data.manga`、相似标题 `duplicate` 及用 `submit_sign: '1'` 确认、未搜索过的 id 为 410 `search-expired`）；等待队列空闲后记录变为 `completed: true`、`updated_at` 与 `add_date` 的关系；通过监视 `EventsGateway.server.emit` 检查 `download_started`、`download_completed`（`chapters_total: 0`）、`queue_updated` 的内容，且没有七个规范事件以外的事件；封面、章节列表接口；库文件里存的是相对封面地址；删除的口令保护（缺失、错误、正确）、删除后封面文件被删、再删为 404；`queue.json` 写在库文件旁边且最终为 `{ version: 1, tasks: [] }`；`POST /api/library/rezip` 需要口令；默认不发 CORS 头（HTTP 预检、普通请求、Socket.IO 轮询）；未知路由与空请求体的失败信封；非法 JSON、JSON `null`、JSON 字符串请求体为 400 `bad-request`；约 2000 章的重下请求体能被解析而超过 1 MB 的请求体得到 `{ code: 413, error: 'payload-too-large' }`；Swagger 文档包含全部规范路由、不含已删除的旧路由，两条受保护路由声明了 `admin-token` 安全方案。
 
 ### `test/cors.e2e-spec.ts`
 
@@ -1866,7 +1889,11 @@ Jest 配置：`rootDir: '.'`，匹配 `.e2e-spec.ts$`，`ts-jest` 转译，Node 
 
 ### `test/frontend-static.e2e-spec.ts`
 
-不设任何环境变量，直接用默认配置启动 `AppModule`（因此会在 `backend/` 下读写 `./eng_config/manga_library.json`、`./eng_config/queue.json` 等默认路径），需要先构建 `frontend/dist`。覆盖：`GET /` 和 `GET /library/abc`（前端路由）返回含 `<div id="app"` 的 `index.html`；`GET /js/config.js`（已删除的旧接口）为 404；缺失的带扩展名资源 `/assets/missing-abc.js` 为 404，而不是 `index.html`。
+临时数据目录，需要先构建 `frontend/dist`。覆盖：`GET /` 和前端路由 `/settings`、`/mainpage/mangaku`、`/library/abc` 返回含 `<div id="app"` 的 `index.html`；`HEAD /settings` 为 200；`index.html` 引用的 `assets/index-*.js` 与 `/favicon.ico` 为 200；`GET /js/config.js`（已删除的旧接口）与缺失的资源 `/assets/missing-abc.js`、`/assets/nope.js`、`/nope.png` 为 404 `not-found` 信封，而不是 `index.html`；`POST /settings` 为 404。
+
+### `test/queue-restore.e2e-spec.ts`
+
+重启恢复（契约 §3.4）。启动前写好库文件（`-r1`、`-r2` 已完成且 `download_switch: 1`，启动扫描跳过；`-r3` 未完成，启动扫描会排入全量下载）和 `queue.json`（`full-manga -r1`、`full-manga -gone`（库里没有）、`redownload -r2`），在启动前监视 `EventsGateway.prototype.emitDownloadStarted`，然后 `createApp` + `init`。等队列空闲后断言：`download_started` 依次是 `-r1 full-manga`、`-r2 redownload`、`-r3 full-manga`（恢复的任务按顺序、在启动扫描的任务之前执行，`-gone` 被跳过而队列继续）；库文件里三条记录都在，`-r1`、`-r3` 被下载流程写成 `completed: true, serialization: 1`；`queue.json` 最终为空。修复前（执行器在 `onModuleInit` 登记）只会看到 `-r3`。
 
 ---
 
@@ -2094,7 +2121,7 @@ DogeManga 页面解析。顶部导入：`base64`、`random`、`re`、`gevent`、
 1. 检出；setup-node（`.nvmrc`，缓存键包含前后端两个 lock 文件）。
 2. `npm ci` → `npm run lint`（`eslint "{src,test}/**/*.ts" --max-warnings 0`）→ `npm run build` → `npm test`（Jest 单测，`rootDir: src`，匹配 `*.spec.ts`）。
 3. "Build frontend for e2e"：在 `frontend` 目录 `npm ci && npm run build`。理由（注释）：e2e 从 `<repo>/frontend/dist` 提供单页应用（`frontend-static.e2e-spec.ts` 需要）。
-4. `npm run test:e2e`（`jest --config ./test/jest-e2e.json`，跑第 13 节的三个文件）。
+4. `npm run test:e2e`（`jest --config ./test/jest-e2e.json`，跑第 13 节的四个文件）。
 
 **`e2e`（End-to-end (Playwright)，`ubuntu-24.04`）**
 
@@ -2141,4 +2168,4 @@ DogeManga 页面解析。顶部导入：`base64`、`random`、`re`、`gevent`、
 15. **`LibraryService.patch` 的注释与实际调用方不符**：注释说 Kavita 同步和定时任务也用它，实际只有下载编排器用。
 16. **`spaFallback` 的边界**：`GET /api`（无结尾斜杠）返回 `index.html`；含 `.` 的前端路由得到 404。
 17. **时间精度不统一**：新记录的 `add_date`、`updated_at` 是带小数的秒；下载过程写入的 `updated_at` 是整数秒。
-18. **`frontend-static.e2e-spec.ts` 使用默认数据路径**：在 `backend/eng_config/` 下读写真实文件，而不是临时目录。
+18. ~~**`frontend-static.e2e-spec.ts` 使用默认数据路径**~~：已改为临时目录（与把 e2e 改为经 `createApp` 启动同一批提交）。
