@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import * as api from '@/api/endpoints';
 import { isApiError, type ApiError } from '@/api/errors';
 import { toApiError } from '@/api/http';
+import { mangaUpdatedAt } from '@/api/manga';
 import type {
   AlreadyInLibraryData,
   Chapter,
@@ -37,13 +38,8 @@ type ChangeBody =
   | { kind: 'patch'; id: string; fields: Partial<Manga> };
 type LocalChange = ChangeBody & { v: number };
 
-/** `updated_at`, or `add_date` for a record that lacks it (contract §2). */
-function updatedAt(m: Manga): number {
-  return (m.updated_at as number | undefined) ?? m.add_date;
-}
-
 function newestFirst(a: Manga, b: Manga): number {
-  return updatedAt(b) - updatedAt(a) || b.add_date - a.add_date;
+  return mangaUpdatedAt(b) - mangaUpdatedAt(a) || b.add_date - a.add_date;
 }
 
 export const useLibraryStore = defineStore('library', () => {

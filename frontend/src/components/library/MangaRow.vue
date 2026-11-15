@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import type { Manga } from '@/api/types';
 import { useMangaStatus } from '@/composables/useMangaStatus';
 import { useRelativeTime } from '@/composables/useRelativeTime';
-import { mangaUpdatedAt } from './manga-display';
+import { isAutoUpdate, mangaUpdatedAt } from '@/api/manga';
 import CoverImage from './CoverImage.vue';
 import MangaActionsMenu from './MangaActionsMenu.vue';
 import ProgressBar from '@/components/common/ProgressBar.vue';
@@ -12,7 +12,7 @@ const props = defineProps<{ manga: Manga }>();
 
 const status = useMangaStatus(() => props.manga.manga_id);
 const { relative } = useRelativeTime();
-const autoUpdate = computed(() => props.manga.download_switch === 0);
+const autoUpdate = computed(() => isAutoUpdate(props.manga));
 </script>
 
 <template>

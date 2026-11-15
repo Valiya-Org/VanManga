@@ -1,6 +1,7 @@
 import { useToast } from '@nuxt/ui/composables';
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue';
 import { isApiError } from '@/api/errors';
+import { isAutoUpdate } from '@/api/manga';
 import type { Manga } from '@/api/types';
 import { errorMessage } from '@/errors/messages';
 import { useConfigStore } from '@/stores/config';
@@ -38,7 +39,7 @@ export function useMangaActions(manga: MaybeRefOrGetter<Manga>): MangaActions {
 
   const id = () => toValue(manga).manga_id;
   const busy = computed(() => queue.isMangaBusy(id()));
-  const autoUpdate = computed(() => toValue(manga).download_switch === 0);
+  const autoUpdate = computed(() => isAutoUpdate(toValue(manga)));
   const kavitaUrl = computed(() => {
     if (!config.kavitaEnabled || !session.kavitaLoggedIn) return null;
     return toValue(manga).kavita_url ?? session.kavitaLoginUrl;
