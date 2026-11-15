@@ -151,7 +151,6 @@ Kavita 只有在 `KAVITA_BASE_URL`、`KAVITA_EXPOSE_URL`、`KAVITA_ADMIN_APIKEY`
    - 漫画库文件不是合法 JSON 对象（损坏、截断）时，服务**拒绝启动**并在日志里说明原因，文件不会被改动；修复或从备份恢复后再启动。文件不存在时会新建一个空漫画库。
    - `queue.json` 在队列第一次变化时创建于漫画库同目录。
    - 启动后会扫描一次漫画库：未下完的漫画继续下载，连载中的检查新章节。
-6. **回滚**：git 标签 `flask-final` 保存了 Flask 版的完整源码。要回到旧版，停掉新容器、用备份恢复数据目录，再运行原来的旧镜像。注意：新版加入的漫画在记录里保存的封面地址是 `/api/library/<id>/thumbnail`，旧版没有这个路由。
 
 ### 新增抓取源
 
@@ -308,7 +307,6 @@ Kavita is enabled only when `KAVITA_BASE_URL`, `KAVITA_EXPOSE_URL` and `KAVITA_A
    - If the library file is not a valid JSON object (corrupt, truncated), the server **refuses to start** and logs why, leaving the file untouched; repair it or restore the backup, then start again. A missing file is created as an empty library.
    - `queue.json` is created next to the library file the first time the queue changes.
    - After start-up the library is scanned once: unfinished manga resume, ongoing series are checked for new chapters.
-6. **Rolling back**: the git tag `flask-final` holds the complete Flask source. To go back, stop the new container, restore the data directories from the backup and run your old image. Note that manga added by the new version store the cover URL `/api/library/<id>/thumbnail`, a route the Flask version does not have.
 
 ### Adding a manga source
 
