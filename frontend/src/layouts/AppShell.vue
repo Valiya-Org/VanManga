@@ -153,7 +153,7 @@ watch(
           <UIcon name="i-lucide-download" class="size-5" />
           <span
             v-if="queue.count > 0"
-            class="vm-gradient-bg absolute -top-1.5 -right-2.5 min-w-4 rounded-full px-1 text-[10px] leading-4 text-white"
+            class="absolute -top-1.5 -right-2.5 min-w-4 rounded-full bg-vm-accent px-1 text-[10px] font-medium leading-4 text-vm-bg"
             data-testid="queue-tab-badge"
           >{{ queue.count }}</span>
         </span>
