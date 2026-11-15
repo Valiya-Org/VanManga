@@ -14,6 +14,9 @@ export const uiOptions: NuxtUIOptions = {
   colorMode: false,
   ui: {
     colors: { primary: 'violet', neutral: 'zinc' },
+    // Buttons and inputs are pill-shaped.
+    button: { slots: { base: 'rounded-full' } },
+    input: { slots: { base: 'rounded-full' } },
   },
   icon: {
     clientBundle: { scan: true },
