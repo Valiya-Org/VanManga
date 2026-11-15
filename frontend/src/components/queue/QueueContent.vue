@@ -39,9 +39,9 @@ const counted = computed(() => {
 });
 
 const connection = computed(() => {
-  if (realtime.connected) return { dot: 'bg-emerald-400', text: '实时连接正常' };
+  if (realtime.connected) return { dot: 'bg-vm-accent', text: '实时连接正常' };
   if (realtime.offline) return { dot: 'bg-vm-danger', text: '实时连接已断开，正在重连…' };
-  return { dot: 'bg-amber-400', text: '正在连接…' };
+  return { dot: 'bg-vm-muted animate-pulse', text: '正在连接…' };
 });
 </script>
 

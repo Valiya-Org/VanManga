@@ -122,7 +122,7 @@ async function confirm(): Promise<void> {
             class="max-w-full truncate rounded-full border px-3 py-1 text-sm transition-colors"
             :class="
               selected.has(c.index)
-                ? 'border-transparent bg-violet-500/25 text-vm-accent'
+                ? 'border-transparent bg-vm-accent/20 text-vm-accent'
                 : 'border-vm-divider text-vm-text hover:border-vm-muted'
             "
             :aria-pressed="selected.has(c.index)"

@@ -15,7 +15,7 @@ const percent = computed(() =>
 
 <template>
   <div
-    class="h-1.5 w-full overflow-hidden rounded-full bg-white/15"
+    class="h-1.5 w-full overflow-hidden rounded-full bg-vm-divider"
     role="progressbar"
     :aria-label="label ?? '下载进度'"
     aria-valuemin="0"

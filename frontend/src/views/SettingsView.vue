@@ -91,7 +91,7 @@ async function rezip(): Promise<void> {
 
       <div v-else-if="session.kavitaLoggedIn" class="space-y-3" data-testid="kavita-logged-in">
         <p class="flex items-center gap-2 text-sm">
-          <span class="size-2 rounded-full bg-emerald-400" aria-hidden="true" />
+          <span class="size-2 rounded-full bg-vm-accent" aria-hidden="true" />
           已登录 Kavita，可从漫画菜单直接打开
         </p>
         <div class="flex flex-wrap gap-2">

@@ -5,7 +5,9 @@
  * VanManga palette — the single place where colours are defined.
  * Fixed dark theme (index.html sets <html class="dark">); there is no light mode.
  * The gradient is used in exactly four places: "Manga" in the logo, primary
- * buttons, the "新" badge and progress bars.
+ * buttons, the "新" badge and progress bars. Every other colour is one of the
+ * eight palette values below (optionally with alpha); the logo's "Van" is
+ * plain white, as the spec asks.
  */
 @theme static {
   --color-vm-bg: #121218;      /* page */
@@ -32,9 +34,9 @@
   --ui-bg-accented: var(--color-vm-divider);
   --ui-border: var(--color-vm-divider);
   --ui-border-muted: var(--color-vm-divider);
-  --ui-border-accented: #3a3a4d;
+  --ui-border-accented: var(--color-vm-divider);
   --ui-text: var(--color-vm-text);
-  --ui-text-highlighted: #ffffff;
+  --ui-text-highlighted: var(--color-vm-text);
   --ui-text-toned: var(--color-vm-text);
   --ui-text-muted: var(--color-vm-muted);
   --ui-text-dimmed: var(--color-vm-muted);
@@ -62,7 +64,7 @@ body {
 
 .vm-gradient-btn {
   background: var(--vm-gradient);
-  color: #fff;
+  color: var(--color-vm-text);
   border: 0;
 }
 
